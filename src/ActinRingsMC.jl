@@ -7,7 +7,7 @@
 # type for us info
 # function to run simple adaptive US sim
 
-module ActinRingMC
+module ActinRingsMC
 
 using Random
 
@@ -102,7 +102,7 @@ function generate_starting_config(lattice, Nfil, Nsca, lf)
             wrap_pos!(lattice, pos)
         end
         pos[1] += 1
-        pos[1] % 2 ? pos[2] = lf - 1: pos[2] = 0
+        pos[1] % 2 ? pos[2] = lf - 1 : pos[2] = 0
         wrap_pos!(lattice, pos)
     end
 end
