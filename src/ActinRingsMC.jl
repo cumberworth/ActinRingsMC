@@ -27,10 +27,12 @@ struct SystemParams
 end
 
 struct SimulationParams
+    iters::Int
     steps::Int
+    max_bias_diff::Float64
     write_interval::Int
     radius_move_freq::Float64
-    op_filename::String
+    filebase::String
 end
 
 mutable struct Filament
@@ -57,11 +59,16 @@ mutable struct Lattice
     current_occupancy::Dict{Vector{Int},Tuple{Int,Int}}
     trial_occupancy::Dict{Vector{Int},Tuple{Int,Int}}
     height::Int
+    current_height::Int
+    trial_height::Int
+    max_height::Int
+    min_height::Int
 end
 
-function Lattice(height::Int)
+function Lattice(height::Int, max_height, min_height)
     occupancy::Dict{Vector{Int},Tuple{Int,Int}} = Dict()
-    Lattice(occupancy, occupancy, copy(occupancy), height)
+    Lattice(occupancy, occupancy, copy(occupancy), height, height, height,
+            max_height, min_height)
 end
 
 function calc_lf(Lf::Float64, delta::Float64)::Int
@@ -76,8 +83,19 @@ function calc_lattice_height(Nsca::Int, lf::Int)
     Nsca * lf - Nsca - 1
 end
 
+function calc_radius(delta, height)
+    delta * (height - 1)
+end
+
+function update_radius!(system::System, lattice::Lattice, height::Int)
+    lattice.height = height
+    system.radius = calc_radius(system.parms.delta, height)
+    return nothing
+end
+
 function use_current_coors!(system::System, lattice::Lattice)
     lattice.occupancy = lattice.current_occupancy
+    update_radius!(system, lattice, lattice.current_height)
     for filament in system.filaments
         filament.coors = filament.current_coors
     end
@@ -86,10 +104,37 @@ end
 
 function use_trial_coors!(system::System, lattice::Lattice)
     lattice.occupancy = lattice.trial_occupancy
+    update_radius!(system, lattice, lattice.trial_height)
     for filament in system.filaments
         filament.coors = filament.trial_coors
     end
     return nothing
+end
+
+function accept_trial!(filament::Filament, lattice::Lattice)
+    filament.current_coors = copy(filament.trial_coors)
+    lattice.current_occupancy = copy(lattice.trial_occupancy)
+end
+
+function accept_trial!(system::System, lattice::Lattice)
+    for filament in system.filaments
+        filament.current_coors = copy(filament.trial_coors)
+    end
+    lattice.current_occupancy = copy(lattice.trial_occupancy)
+    lattice.current_height = lattice.trial_height
+end
+
+function accept_current!(filament::Filament, lattice::Lattice)
+    filament.trial_coors = copy(filament.current_coors)
+    lattice.trial_occupancy = copy(lattice.current_occupancy)
+end
+
+function accept_current!(system::System, lattice::Lattice)
+    for filament in system.filaments
+        filament.trial_coors = copy(filament.current_coors)
+    end
+    lattice.trial_occupancy = copy(lattice.current_occupancy)
+    lattice.trial_height = lattice.current_height
 end
 
 function wrap_pos!(lattice::Lattice, pos::Vector{Int})
@@ -98,12 +143,6 @@ function wrap_pos!(lattice::Lattice, pos::Vector{Int})
     elseif pos[2] < 0
         pos[2] = (lattice.height + 1) + pos[2]
     end
-    return nothing
-end
-
-function update_radius(system::System, lattice::Lattice, height::Int)
-    lattice.height = height
-    system.radius = system.parms.delta * (height - 1)
     return nothing
 end
 
@@ -143,7 +182,7 @@ function select_rand_filament(system::System)
 end
 
 function generate_random_vector()
-    [rand(0:5), rand(0:5)]
+    [0, rand(-5:5)]
 end
 
 function calc_filament_bending_energy(system::System)
@@ -174,12 +213,22 @@ function calc_overlap_energy(system::System, lattice::Lattice, filament::Filamen
     calc_overlap_energy(system, l)
 end
 
+function calc_bias_energy(lattice::Lattice, biases::Vector{Float64})
+    biases[lattice.height - lattice.min_height + 1]
+end
+
 function calc_total_energy(system::System, lattice::Lattice)
     ene = 0
     for filament in system.filaments
         ene += calc_overlap_energy(system, lattice, filament)/2
         ene += calc_filament_bending_energy(system)
     end
+    return ene
+end
+
+function calc_total_energy(system::System, lattice::Lattice, biases::Vector{Float64})
+    ene = calc_total_energy(system, lattice)
+    ene += calc_bias_energy(system, biases)
     return ene
 end
 
@@ -195,12 +244,14 @@ function calc_energy_diff!(system::System, lattice::Lattice, filament::Filament)
     trial_overlap_ene + trial_bending_ene - cur_overlap_ene - cur_bending_ene
 end
 
-function calc_energy_diff!(system::System, lattice::Lattice)
+function calc_energy_diff!(system::System, lattice::Lattice, biases::Vector{Float64})
     use_current_coors!(system, lattice)
     current_ene = calc_total_energy(system, lattice)
+    current_ene += calc_bias_energy(lattice, biases)
 
     use_trial_coors!(system, lattice)
     trial_ene = calc_total_energy(system, lattice)
+    trial_ene += calc_bias_energy(lattice, biases)
 
     trial_ene - current_ene
 end
@@ -308,32 +359,8 @@ function filaments_contiguous(system::System, lattice::Lattice)
     return true
 end
 
-function accept_trial!(filament::Filament, lattice::Lattice)
-    filament.current_coors = copy(filament.trial_coors)
-    lattice.current_occupancy = copy(lattice.trial_occupancy)
-end
-
-function accept_trial!(system::System, lattice::Lattice)
-    for filament in system.filaments
-        filament.current_coors = copy(filament.trial_coors)
-    end
-    lattice.current_occupancy = copy(lattice.trial_occupancy)
-end
-
-function accept_current!(filament::Filament, lattice::Lattice)
-    filament.trial_coors = copy(filament.current_coors)
-    lattice.trial_occupancy = copy(lattice.current_occupancy)
-end
-
-function accept_current!(system::System, lattice::Lattice)
-    for filament in system.filaments
-        filament.trial_coors = copy(filament.current_coors)
-    end
-    lattice.trial_occupancy = copy(lattice.current_occupancy)
-end
-
-function accept_move(delta_energy::Float64)
-    p_accept = min(1, exp(delta_energy))
+function accept_move(system::System, delta_energy::Float64)
+    p_accept = min(1, exp(-delta_energy/kb/system.parms.T))
     accept = false
     if p_accept == 1 || p_accept > rand(Float64)
         accept = true;
@@ -362,7 +389,7 @@ function translate_filament!(filament::Filament, lattice::Lattice, move_vector::
 end
 
 # Should I be accepting the current or just propose again?
-function attempt_translation_move!(system::System, lattice::Lattice)
+function attempt_translation_move!(system::System, lattice::Lattice, biases::Vector{Float64})
     use_trial_coors!(system, lattice)
     filament = select_rand_filament(system)
     move_vector = generate_random_vector()
@@ -376,8 +403,9 @@ function attempt_translation_move!(system::System, lattice::Lattice)
         use_current_coors!(system, lattice)
         return nothing
     end
+    println((filament.index, move_vector))
     delta_energy = calc_energy_diff!(system, lattice, filament)
-    if accept_move(delta_energy)
+    if accept_move(system, delta_energy)
         accept_trial!(filament, lattice)
     else
         accept_current!(filament, lattice)
@@ -432,8 +460,13 @@ function translate_filaments_with_split_points!(filaments::Vector{Filament},
     return true
 end
 
-function attempt_radius_move!(system::System, lattice::Lattice)
+function attempt_radius_move!(system::System, lattice::Lattice, biases::Vector{Float64})
     dir = rand([-1, 1])
+    if dir == 1 && lattice.height == lattice.max_height
+        dir = -1
+    elseif dir == -1 && lattice.height == lattice.min_height
+        dir = 1
+    end
     use_trial_coors!(system, lattice)
     filaments = rand(system.filaments, rand(1:system.parms.Nfil))
     split_points = find_split_points(filaments, lattice, dir)
@@ -442,9 +475,9 @@ function attempt_radius_move!(system::System, lattice::Lattice)
         use_current_coors!(system, lattice)
         return nothing
     end
-    update_radius(system, lattice, lattice.height + dir)
+    lattice.trial_height += dir
+    update_radius!(system, lattice, lattice.trial_height)
     if !filaments_contiguous(system, lattice)
-        update_radius(system, lattice, lattice.height - dir)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
         return nothing
@@ -452,18 +485,17 @@ function attempt_radius_move!(system::System, lattice::Lattice)
     if dir == 1
         # Should I be accepting the current or just propose again?
         if !ring_and_system_connected(system, lattice, system.filaments[1])
-            update_radius(system, lattice, lattice.height - dir)
             accept_current!(system, lattice)
             use_current_coors!(system, lattice)
             return nothing
         end
     end
-    delta_energy = calc_energy_diff!(system::System, lattice::Lattice)
-    if accept_move(delta_energy)
+    delta_energy = calc_energy_diff!(system, lattice, biases)
+    if accept_move(system, delta_energy)
         accept_trial!(system, lattice)
         use_current_coors!(system, lattice)
     else
-        update_radius(system, lattice, lattice.height - dir)
+        update_radius!(system, lattice, lattice.height - dir)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
     end
@@ -478,30 +510,136 @@ function select_move(simparms::SimulationParams)
     end
 end
 
-function prepare_op_file(filename::String)
-    op_file = open(filename, "w")
+function prepare_ops_file(filename::String)
+    file = open(filename, "w")
     header = "step energy height radius"
-    println(op_file, header)
-    return op_file
+    println(file, header)
+    return file
 end
 
-function write_ops(system::System, lattice::Lattice, step::Int, op_file::IOStream)
-    println(op_file, "$step $(system.energy) $(lattice.height) $(system.radius)")
+function prepare_us_file(filename::String, lattice::Lattice)
+    file = open(filename, "w")
+    header = ""
+    for h in lattice.min_height:lattice.max_height
+        header = "$(header)$h "
+    end
+    println(file, header)
+    return file
+end
+
+function prepare_vtf_file(filename::String, system::System)
+    file = open(filename, "w")
+    atom_i = 0
+    for filament in system.filaments
+        end_atom_i = atom_i + filament.lf - 1
+        println(file, "a $atom_i:$end_atom_i c $(filament.index) r 2.5")
+        atom_i += filament.lf
+    end
+    println(file, "")
+    return file
+end
+
+function write_vtf(system::System, file::IOStream)
+    println(file, "t")
+    for filament in system.filaments
+        for i in 1:filament.lf
+            # Widen the aspect ratio for easier viewing
+            x = filament.coors[1, i]*10
+            y = filament.coors[2, i]
+            println(file, "$x $y 0")
+        end
+    end
+    println(file, "")
+end
+
+function write_ops(system::System, lattice::Lattice, step::Int, file::IOStream)
+    println(file, "$step $(system.energy) $(lattice.height) $(system.radius)")
+end
+
+function write_us_data(data::Vector, file::IOStream)
+    for d in data
+        print(file, "$d ")
+    end
+    println(file, "")
+end
+
+function update_counts(counts::Vector{Int}, lattice)
+    counts[lattice.height - lattice.min_height + 1] += 1
+    return nothing
 end
 
 # filebase or already setup files
-function run(system::System, lattice::Lattice, simparms::SimulationParams)
-    op_file = prepare_op_file(simparms.op_filename)
+function run!(system::System, lattice::Lattice, simparms::SimulationParams,
+        counts::Vector{Int}, biases::Vector{Float64}, ops_file::IOStream,
+        vtf_file::IOStream)
     for step in 1:simparms.steps
-        println(step)
         attempt_move! = select_move(simparms)
-        attempt_move!(system, lattice)
+        attempt_move!(system, lattice, biases)
+        update_counts(counts, lattice)
         if step % simparms.write_interval == 0
+            println(step)
             system.energy = calc_total_energy(system, lattice)
-            write_ops(system, lattice, step, op_file)
+            write_ops(system, lattice, step, ops_file)
+            write_vtf(system, vtf_file)
         end
     end
-    close(op_file)
+end
+
+function run!(system::System, lattice::Lattice, simparms::SimulationParams)
+    ops_file = prepare_ops_file("$(simparms.filebase).ops")
+    vtf_file = prepare_vtf_file("$(simparms.filebase).vtf", system)
+    counts::Vector{Int} = zeros(lattice.max_height - lattice.min_height + 1)
+    biases::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
+    run!(system, lattice, simparms, counts, biases, ops_file, vtf_file)
+    close(ops_file)
+end
+
+function update_biases!(counts::Vector{Int}, freqs::Vector{Float64},
+        probs::Vector{Float64}, biases::Vector{Float64}, T::Float64,
+        max_bias_diff::Float64)
+    norm = sum(counts .* exp.(biases))
+    for i in 1:length(counts)
+        if counts[i] == 0
+            freqs[i] = 0
+            probs[i] = 0
+            bias_diff = -max_bias_diff
+        else
+            freqs[i] = 1 / counts[i]
+            probs[i] = counts[i] / norm
+            bias_diff = kb*T*log.(probs[i]) - biases[i]
+            if bias_diff > max_bias_diff
+                bias_diff = max_bias_diff
+            elseif bias_diff < -max_bias_diff
+                bias_diff = -max_bias_diff
+            end
+        end
+        biases[i] += bias_diff
+        counts[i] = 0
+    end
+end
+
+function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
+    counts::Vector{Int} = zeros(lattice.max_height - lattice.min_height + 1)
+    freqs::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
+    probs::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
+    biases::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
+    freqs_file = prepare_us_file("$(simparms.filebase).freqs", lattice)
+    biases_file = prepare_us_file("$(simparms.filebase).biases", lattice)
+    for i in 1:simparms.iters
+        # prepare us output file
+        iter_filebase = "$(simparms.filebase)_iter-$i"
+        ops_file = prepare_ops_file("$iter_filebase.ops")
+        vtf_file = prepare_vtf_file("$iter_filebase.vtf", system)
+        run!(system, lattice, simparms, counts, biases, ops_file, vtf_file)
+        update_biases!(counts, freqs, probs, biases, system.parms.T,
+                       simparms.max_bias_diff)
+        write_us_data(freqs, freqs_file)
+        write_us_data(biases, biases_file)
+        close(ops_file)
+        close(vtf_file)
+    end
+    close(freqs_file)
+    close(biases_file)
 end
 
 end
