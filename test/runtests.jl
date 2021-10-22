@@ -13,10 +13,10 @@ Nfil = 6
 Nsca = 4
 
 iters = 10
-steps = 1e4
+steps = 1e5
 max_bias_diff = 10
-write_interval = 1e2
-radius_move_freq = 1.0
+write_interval = 1e3
+radius_move_freq = 0.5
 filebase = "test"
 
 lf = armc.calc_lf(Lf, delta)

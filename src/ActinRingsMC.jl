@@ -182,7 +182,7 @@ function select_rand_filament(system::System)
 end
 
 function generate_random_vector()
-    [0, rand(-5:5)]
+    [0, rand([-1, 1])]
 end
 
 function calc_filament_bending_energy(system::System)
@@ -257,8 +257,9 @@ function calc_energy_diff!(system::System, lattice::Lattice, biases::Vector{Floa
 end
 
 function ring_and_system_connected(system::System, lattice::Lattice, filament::Filament)
-    pos = copy(filament.coors[:, 1])
+    pos = filament.coors[:, 1]
     site_i = 1
+    path::Vector{Int} = [filament.index]
     path_length = 0
     ring_contig = false
     connected_filaments::Set{Int} = Set(filament.index)
@@ -273,7 +274,7 @@ function ring_and_system_connected(system::System, lattice::Lattice, filament::F
                 union!(connected_filaments, adj_filament_i)
                 adj_filament = system.filaments[adj_filament_i]
                 ring_contig, connected_filaments = search_filament_for_path(
-                    system, lattice, adj_filament, adj_site_i, filament,
+                    system, lattice, adj_filament, adj_site_i, path,
                     path_length, ring_contig, connected_filaments)
                 if ring_contig && length(connected_filaments) == system.parms.Nfil
                     return true
@@ -290,10 +291,11 @@ end
 
 # this seems to work but its really long and has too many arguments
 function search_filament_for_path(system::System, lattice::Lattice,
-        filament::Filament, site_i::Int, root_filament::Filament,
+        filament::Filament, site_i::Int, path::Vector{Int},
         path_length::Int, ring_contig::Bool, connected_filaments::Set{Int})
 
-    initial_pos = copy(filament.coors[:, site_i])
+    searched_filaments::Set{Int} = Set()
+    initial_pos = filament.coors[:, site_i]
     initial_path_length = path_length
     pos = copy(initial_pos)
     dir = -1
@@ -315,24 +317,28 @@ function search_filament_for_path(system::System, lattice::Lattice,
             adj_pos = [pos[1] + dx, pos[2]]
             if adj_pos in keys(lattice.occupancy)
                 next_filament_i, next_site_i = lattice.occupancy[adj_pos]
-                union!(connected_filaments, next_filament_i)
-                if (next_filament_i == root_filament.index &&
+                if (next_filament_i == path[1] &&
                     abs(path_length) > filament.lf)
                     ring_contig = true
                 end
                 if ring_contig && length(connected_filaments) == system.parms.Nfil
                     return (ring_contig, connected_filaments) 
                 end
-                if next_filament_i in connected_filaments
+                if (next_filament_i in searched_filaments ||
+                    next_filament_i in path)
                     continue
                 end
+                union!(connected_filaments, next_filament_i)
+                union!(searched_filaments, next_filament_i)
+                push!(path, next_filament_i)
                 next_filament = system.filaments[next_filament_i]
                 ring_contig, connected_filaments = search_filament_for_path(
                     system, lattice, next_filament, next_site_i,
-                    root_filament, path_length, ring_contig, connected_filaments)
+                    path, path_length, ring_contig, connected_filaments)
                 if ring_contig && length(connected_filaments) == system.parms.Nfil
                     return (ring_contig, connected_filaments)
                 end
+                pop!(path)
             end
         end
         site_i += dir
@@ -383,6 +389,7 @@ function translate_filament!(filament::Filament, lattice::Lattice, move_vector::
         if pos in keys(lattice.occupancy)
             return false
         end
+        filament.coors[:, i] = pos
         lattice.occupancy[copy(pos)] = (filament.index, i)
     end
     return true
@@ -403,7 +410,6 @@ function attempt_translation_move!(system::System, lattice::Lattice, biases::Vec
         use_current_coors!(system, lattice)
         return nothing
     end
-    println((filament.index, move_vector))
     delta_energy = calc_energy_diff!(system, lattice, filament)
     if accept_move(system, delta_energy)
         accept_trial!(filament, lattice)
