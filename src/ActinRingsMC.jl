@@ -72,19 +72,19 @@ function Lattice(height::Int, max_height, min_height)
 end
 
 function calc_lf(Lf::Float64, delta::Float64)::Int
-    div(Lf, delta) + 1
+    div(Lf, delta)
 end
 
 function calc_Lf(lf::Int, delta::Float64)
-    delta * (lf - 1)
+    delta * lf
 end
 
-function calc_lattice_height(Nsca::Int, lf::Int)
+function calc_max_lattice_height(Nsca::Int, lf::Int)
     Nsca * lf - Nsca - 1
 end
 
-function calc_radius(delta, height)
-    delta * (height - 1)
+function calc_radius(delta::Float64, height::Int)
+    delta * (height + 1)/(2pi)
 end
 
 function update_radius!(system::System, lattice::Lattice, height::Int)
@@ -147,7 +147,8 @@ function wrap_pos!(lattice::Lattice, pos::Vector{Int})
 end
 
 # only works with even number of sca filaments
-function generate_starting_config!(lattice::Lattice, Nfil::Int, Nsca::Int, lf::Int)
+function generate_starting_config(lattice::Lattice, Nfil::Int, Nsca::Int,
+        lf::Int, overlap::Int)
     filaments::Vector{Filament} = []
     pos = [0, 0]
     Ni = 1
@@ -156,14 +157,12 @@ function generate_starting_config!(lattice::Lattice, Nfil::Int, Nsca::Int, lf::I
             coors = zeros(2, lf)
             for j in 1:lf
                 coors[:, j] = pos
-                lattice.current_occupancy[copy(pos)] = (Ni, j)
-                lattice.trial_occupancy[copy(pos)] = (Ni, j)
                 pos[2] += 1
                 wrap_pos!(lattice, pos)
             end
             filament = Filament(lf, coors, coors, copy(coors), Ni)
             push!(filaments, filament)
-            pos[2] += lf - 2
+            pos[2] += lf - 2*overlap
             wrap_pos!(lattice, pos)
             Ni += 1
             if Ni > Nfil
@@ -171,10 +170,24 @@ function generate_starting_config!(lattice::Lattice, Nfil::Int, Nsca::Int, lf::I
             end
         end
         pos[1] += 1
-        pos[1] % 2 == 0 ? pos[2] = 0 : pos[2] = lf - 1
+        pos[1] % 2 == 0 ? pos[2] = 0 : pos[2] = lf - overlap
         wrap_pos!(lattice, pos)
     end
     return filaments
+end
+
+function update_lattice_occupancies!(filaments::Vector{Filament}, lattice::Lattice)
+    lattice.current_occupancy = Dict()
+    lattice.trial_occupancy = Dict()
+    for filament in filaments
+        for i in 1:filament.lf
+            pos = filament.coors[:, i]
+            lattice.current_occupancy[copy(pos)] = (filament.index, i)
+            lattice.trial_occupancy[copy(pos)] = (filament.index, i)
+        end
+    end
+    lattice.occupancy = lattice.current_occupancy
+    return nothing
 end
 
 function select_rand_filament(system::System)
@@ -189,14 +202,21 @@ function calc_filament_bending_energy(system::System)
     system.parms.EI * system.parms.Lf / (2 * system.radius^2)
 end
 
-function calc_overlap_energy(system::System, l::Int)
-    L = system.parms.delta * (l - 1)
+function calc_total_bending_energy(system::System)
+    ene = 0
+    for _ in 1:system.parms.Nfil
+        ene += calc_filament_bending_energy(system)
+    end
+    return ene
+end
+
+function calc_overlap_energy(system::System, L::Float64)
     factor_t = L * kb * system.parms.T / system.parms.delta 
     ks = system.parms.ks
     kd = system.parms.kd
     Xc = system.parms.Xc
     log_t = log(1 + ks^2 * Xc / (kd * (ks + Xc)^2))
-    factor_t * log_t
+    -factor_t * log_t
 end
 
 function calc_overlap_energy(system::System, lattice::Lattice, filament::Filament)
@@ -210,7 +230,16 @@ function calc_overlap_energy(system::System, lattice::Lattice, filament::Filamen
             end
         end
     end
-    calc_overlap_energy(system, l)
+    L = system.parms.delta * l
+    calc_overlap_energy(system, L)
+end
+
+function calc_overlap_energy(system::System, lattice::Lattice)
+    ene = 0
+    for filament in system.filaments
+        ene += calc_overlap_energy(system, lattice, filament)/2
+    end
+    return ene
 end
 
 function calc_bias_energy(lattice::Lattice, biases::Vector{Float64})
