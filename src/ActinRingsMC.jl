@@ -1,12 +1,3 @@
-# I/O:
-# function to read the simulation parameters (total number of filaments, params...)
-# function to write out configurations
-# function to write out ops (radius, energy, total overlap, etc)
-
-# US:
-# type for us info
-# function to run simple adaptive US sim
-
 module ActinRingsMC
 
 using Random
@@ -81,6 +72,10 @@ end
 
 function calc_max_lattice_height(Nsca::Int, lf::Int)
     Nsca * lf - Nsca - 1
+end
+
+function calc_min_lattice_height(Nsca::Int, lf::Int)
+    div(Nsca, 2)*lf - 1
 end
 
 function calc_radius(delta::Float64, height::Int)
@@ -405,8 +400,6 @@ function accept_move(system::System, delta_energy::Float64)
 end
 
 function translate_filament!(filament::Filament, lattice::Lattice, move_vector::Vector{Int})
-
-    # Remove occupancy
     for i in 1:filament.lf
         pos = filament.coors[:, i]
         delete!(lattice.occupancy, pos)
@@ -432,21 +425,22 @@ function attempt_translation_move!(system::System, lattice::Lattice, biases::Vec
     if !translate_filament!(filament, lattice, move_vector)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
-        return nothing
+        return false
     end
     if !ring_and_system_connected(system, lattice, filament)
         accept_current!(filament, lattice)
         use_current_coors!(system, lattice)
-        return nothing
+        return false
     end
     delta_energy = calc_energy_diff!(system, lattice, filament)
-    if accept_move(system, delta_energy)
+    accept = accept_move(system, delta_energy)
+    if accept
         accept_trial!(filament, lattice)
     else
         accept_current!(filament, lattice)
     end
     use_current_coors!(system, lattice)
-    return nothing
+    return accept
 end
 
 function find_split_points(filaments::Vector{Filament}, lattice::Lattice, dir::Int)
@@ -468,8 +462,6 @@ end
 
 function translate_filaments_with_split_points!(filaments::Vector{Filament},
     split_points::Vector{Int}, lattice::Lattice, dir::Int)
-
-    # Remove lattice occupancy
     for (filament, split_point) in zip(filaments, split_points)
         for i in 1:split_point
             pos = filament.coors[:, i]
@@ -508,25 +500,26 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Vector{F
     if !translate_filaments_with_split_points!(filaments, split_points, lattice, dir)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
-        return nothing
+        return false
     end
     lattice.trial_height += dir
     update_radius!(system, lattice, lattice.trial_height)
     if !filaments_contiguous(system, lattice)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
-        return nothing
+        return false
     end
     if dir == 1
         # Should I be accepting the current or just propose again?
         if !ring_and_system_connected(system, lattice, system.filaments[1])
             accept_current!(system, lattice)
             use_current_coors!(system, lattice)
-            return nothing
+            return false
         end
     end
     delta_energy = calc_energy_diff!(system, lattice, biases)
-    if accept_move(system, delta_energy)
+    accept = accept_move(system, delta_energy)
+    if accept
         accept_trial!(system, lattice)
         use_current_coors!(system, lattice)
     else
@@ -534,7 +527,7 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Vector{F
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
     end
-    return nothing
+    return accept
 end
 
 function select_move(simparms::SimulationParams)
@@ -627,12 +620,14 @@ function run!(system::System, lattice::Lattice, simparms::SimulationParams)
     biases::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
     run!(system, lattice, simparms, counts, biases, ops_file, vtf_file)
     close(ops_file)
+    close(vtf_file)
 end
 
 function update_biases!(counts::Vector{Int}, freqs::Vector{Float64},
         probs::Vector{Float64}, biases::Vector{Float64}, T::Float64,
         max_bias_diff::Float64)
     norm = sum(counts .* exp.(biases))
+    max_bias_diff *= kb*T
     for i in 1:length(counts)
         if counts[i] == 0
             freqs[i] = 0
@@ -661,7 +656,7 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
     freqs_file = prepare_us_file("$(simparms.filebase).freqs", lattice)
     biases_file = prepare_us_file("$(simparms.filebase).biases", lattice)
     for i in 1:simparms.iters
-        # prepare us output file
+        println("Iter $i")
         iter_filebase = "$(simparms.filebase)_iter-$i"
         ops_file = prepare_ops_file("$iter_filebase.ops")
         vtf_file = prepare_vtf_file("$iter_filebase.vtf", system)
