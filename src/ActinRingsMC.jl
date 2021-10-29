@@ -787,20 +787,44 @@ function update_counts(counts::Vector{Int}, lattice)
 end
 
 """Run an MC simulation."""
-function run!(system::System, lattice::Lattice, simparms::SimulationParams,
-        counts::Vector{Int}, biases::Vector{Float64}, ops_file::IOStream,
-        vtf_file::IOStream)
+function run!(
+    system::System,
+    lattice::Lattice,
+    simparms::SimulationParams,
+    counts::Vector{Int},
+    biases::Vector{Float64},
+    ops_file::IOStream,
+    vtf_file::IOStream
+)
+
+    # Overly simple way to record move acceptance frequencies
+    attempts = [0, 0]
+    accepts = [0, 0]
     for step in 1:simparms.steps
         attempt_move! = select_move(simparms)
-        attempt_move!(system, lattice, biases)
+        accepted = attempt_move!(system, lattice, biases)
+        attempt_move! === attempt_translation_move! ? attempts[1] += 1 : attempts[2] += 1
+        if accepted
+            attempt_move! === attempt_translation_move! ? accepts[1] += 1 : accepts[2] += 1
+        end
         update_counts(counts, lattice)
         if step % simparms.write_interval == 0
-            println(step)
+            println("Step: $step")
             system.energy = total_energy(system, lattice)
             write_ops(system, lattice, step, ops_file)
             write_vtf(system, vtf_file)
         end
     end
+
+    println("Filament translation")
+    println("Attempts: $(attempts[1])")
+    println("Accepts: $(accepts[1])")
+    println("Ratio: $(accepts[1] / attempts[1])")
+    println()
+    println("Radius move")
+    println("Attempts: $(attempts[2])")
+    println("Accepts: $(accepts[2])")
+    println("Ratio: $(accepts[2] / attempts[2])")
 
     return nothing
 end
@@ -822,9 +846,14 @@ Calculate new biases from counts.
 
 Updates the passed arrays in the process.
 """
-function update_biases!(counts::Vector{Int}, freqs::Vector{Float64},
-        probs::Vector{Float64}, biases::Vector{Float64}, T::Float64,
-        max_bias_diff::Float64)
+function update_biases!(
+    counts::Vector{Int},
+    freqs::Vector{Float64},
+    probs::Vector{Float64},
+    biases::Vector{Float64},
+    T::Float64,
+    max_bias_diff::Float64
+)
     norm = sum(counts .* exp.(biases))
     max_bias_diff *= kb*T
     for i in 1:length(counts)
@@ -842,6 +871,7 @@ function update_biases!(counts::Vector{Int}, freqs::Vector{Float64},
                 bias_diff = -max_bias_diff
             end
         end
+
         biases[i] += bias_diff
         counts[i] = 0
     end
@@ -858,7 +888,7 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
     freqs_file = prepare_us_file("$(simparms.filebase).freqs", lattice)
     biases_file = prepare_us_file("$(simparms.filebase).biases", lattice)
     for i in 1:simparms.iters
-        println("Iter $i")
+        println("Iter: $i")
         iter_filebase = "$(simparms.filebase)_iter-$i"
         ops_file = prepare_ops_file("$iter_filebase.ops")
         vtf_file = prepare_vtf_file("$iter_filebase.vtf", system)
