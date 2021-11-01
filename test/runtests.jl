@@ -71,9 +71,17 @@ max_bias_diff = 5
 write_interval = 1e3
 radius_move_freq = 0.5
 filebase = "test"
+analytical_biases = true
 
-simparms = armc.SimulationParams(iters, steps, max_bias_diff, write_interval,
-                                 radius_move_freq, filebase)
+simparms = armc.SimulationParams(
+    iters,
+    steps,
+    max_bias_diff,
+    write_interval,
+    radius_move_freq,
+    filebase,
+    analytical_biases
+)
 
 armc.run!(system, lattice, simparms)
 #armc.run_us!(system, lattice, simparms)

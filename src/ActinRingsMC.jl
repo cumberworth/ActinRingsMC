@@ -24,6 +24,7 @@ struct SimulationParams
     write_interval::Int
     radius_move_freq::Float64
     filebase::String
+    analytical_biases::Bool
 end
 
 mutable struct Filament
@@ -236,6 +237,10 @@ end
 """Calculate the bending energy (J) for a single filament."""
 function filament_bending_energy(system::System)
     return system.parms.EI * system.parms.Lf / (2 * system.radius^2)
+end
+
+function filament_bending_energy(system::System, radius::Float64)
+    return system.parms.EI * system.parms.Lf / (2 * radius^2)
 end
 
 """Calculate the bending energy (J) for the whole system."""
@@ -879,12 +884,29 @@ function update_biases!(
     return nothing
 end
 
+function analytical_biases(system::System, lattice::Lattice, biases::Vector{Float64})
+    radius_max = calc_radius(system.parms.delta, lattice.max_height)
+    for h in lattice.min_height:lattice.max_height
+        radius = calc_radius(system.parms.delta, h)
+        L = 2*pi*(radius_max - radius)/system.parms.Nsca
+        overlaps = system.parms.Nsca + 2*(system.parms.Nfil - system.parms.Nsca)
+        sliding_energy = overlaps*overlap_energy(system, L)
+        bending_energy = system.parms.Nfil*filament_bending_energy(system, radius)
+        biases[h - lattice.min_height + 1] = -(sliding_energy + bending_energy)
+    end
+
+    return nothing
+end
+
 """Run an umbrella sampling MC simulation."""
 function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
     counts::Vector{Int} = zeros(lattice.max_height - lattice.min_height + 1)
     freqs::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
     probs::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
     biases::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
+    if simparms.analytical_biases
+        analytical_biases(system, lattice, biases)
+    end
     freqs_file = prepare_us_file("$(simparms.filebase).freqs", lattice)
     biases_file = prepare_us_file("$(simparms.filebase).biases", lattice)
     for i in 1:simparms.iters
