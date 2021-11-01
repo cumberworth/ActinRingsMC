@@ -454,7 +454,7 @@ function search_filament_for_path(
                     path_i = indexin(adj_filament_i, path[1])[1]
                     if path_completed(lattice, path_length, adj_site_i, path[2][path_i])
                         ring_contig = true
-                        Nsca = min(Nsca, length(path[1]) - path_i + 1)
+                        Nsca = min(Nsca, length(path[1]) - path_i + 2)
                     end
                 end
 
