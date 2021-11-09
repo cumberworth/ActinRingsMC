@@ -86,6 +86,6 @@ simparms = armc.SimulationParams(
 )
 
 armc.run!(system, lattice, simparms)
-#armc.run_us!(system, lattice, simparms)
+armc.run_us!(system, lattice, simparms)
 
 main()

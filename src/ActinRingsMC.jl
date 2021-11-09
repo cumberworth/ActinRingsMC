@@ -84,6 +84,7 @@ mutable struct Biases
     probs::Vector{Float64}
     enes::Vector{Float64}
     numbins::Int
+    binwidth::Int
 end
 
 function Biases(lattice::Lattice, binwidth::Int)
@@ -97,7 +98,8 @@ function Biases(lattice::Lattice, binwidth::Int)
         zeros(numbins),
         zeros(numbins),
         zeros(numbins),
-        numbins
+        numbins,
+        binwidth
    )
 end
 
@@ -829,7 +831,8 @@ function write_params(system::System, simparms::SimulationParams, file::IOStream
         "max_bias_diff" => simparms.max_bias_diff,
         "radius_move_freq" => simparms.radius_move_freq,
         "iters" => simparms.iters,
-        "analytical_biases" => simparms.analytical_biases
+        "analytical_biases" => simparms.analytical_biases,
+        "binwidth" => simparms.binwidth
     )
     println(file, JSON.json(parms))
 
@@ -954,16 +957,32 @@ function update_biases!(biases::Biases, T::Float64, max_bias_diff::Float64)
     return nothing
 end
 
-"""Calculate biases from analytical model."""
+"""
+Calculate biases from analytical model.
+
+Interpolate between the bin endpoints.
+"""
 function analytical_biases(system::System, lattice::Lattice, biases::Biases)
     radius_max = calc_radius(system.parms.delta, lattice.max_height)
-    for h in lattice.min_height:lattice.max_height
-        radius = calc_radius(system.parms.delta, h)
-        L = 2*pi*(radius_max - radius)/system.parms.Nsca
-        overlaps = system.parms.Nsca + 2*(system.parms.Nfil - system.parms.Nsca)
-        sliding_energy = overlaps*overlap_energy(system, L)
-        bending_energy = system.parms.Nfil*filament_bending_energy(system, radius)
-        biases[h - lattice.min_height + 1] = -(sliding_energy + bending_energy)
+    for bin in 1:biases.numbins
+        if bin == biases.numbins
+            lower_barrier = biases.barriers[bin - 1]
+            upper_barrier = lower_barrier + biases.binwidth
+        else
+            upper_barrier = biases.barriers[bin]
+            lower_barrier = upper_barrier - biases.binwidth
+        end
+
+        lower_upper_biases = []
+        for h in [lower_barrier, upper_barrier]
+            radius = calc_radius(system.parms.delta, h)
+            L = 2*pi*(radius_max - radius)/system.parms.Nsca
+            overlaps = system.parms.Nsca + 2*(system.parms.Nfil - system.parms.Nsca)
+            sliding_energy = overlaps*overlap_energy(system, L)
+            bending_energy = system.parms.Nfil*filament_bending_energy(system, radius)
+            push!(lower_upper_biases, -(sliding_energy + bending_energy))
+        end
+        biases.enes[bin] = sum(lower_upper_biases)/2
     end
 
     return nothing
@@ -987,9 +1006,9 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
         vtf_file = prepare_vtf_file("$iter_filebase.vtf", system)
         run!(system, lattice, simparms, biases, ops_file, vtf_file)
         update_biases!(biases, system.parms.T, simparms.max_bias_diff)
-        write_us_data(biases, counts_file)
-        write_us_data(biases, freqs_file)
-        write_us_data(biases, biases_file)
+        write_us_data(biases.counts, counts_file)
+        write_us_data(biases.freqs, freqs_file)
+        write_us_data(biases.enes, biases_file)
         close(ops_file)
         close(vtf_file)
     end
