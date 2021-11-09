@@ -26,6 +26,7 @@ struct SimulationParams
     radius_move_freq::Float64
     filebase::String
     analytical_biases::Bool
+    binwidth::Int
 end
 
 mutable struct Filament
@@ -74,6 +75,30 @@ function Lattice(height::Int, max_height::Int, min_height::Int)
         max_height,
         min_height
 )
+end
+
+mutable struct Biases
+    barriers::Vector{Int}
+    counts::Vector{Int}
+    freqs::Vector{Float64}
+    probs::Vector{Float64}
+    enes::Vector{Float64}
+    numbins::Int
+end
+
+function Biases(lattice::Lattice, binwidth::Int)
+    numstates = lattice.max_height - lattice.min_height + 1
+    numbins = div(numstates, binwidth)
+    barriers = create_bin_barriers(lattice, numbins)
+
+    return Biases(
+        barriers,
+        zeros(numbins),
+        zeros(numbins),
+        zeros(numbins),
+        zeros(numbins),
+        numbins
+   )
 end
 
 """Calculate the number of sites per filament."""
@@ -291,8 +316,8 @@ function overlap_energy(system::System, lattice::Lattice)
 end
 
 """Calculate the bias energy (J)."""
-function bias_energy(lattice::Lattice, biases::Vector{Float64})
-    return biases[lattice.height - lattice.min_height + 1]
+function bias_energy(lattice::Lattice, biases::Biases)
+    return biases.enes[get_bin(biases.barriers, lattice.height)]
 end
 
 """Calculate total energy (J)."""
@@ -306,7 +331,7 @@ function total_energy(system::System, lattice::Lattice)
     return ene
 end
 
-function total_energy(system::System, lattice::Lattice, biases::Vector{Float64})
+function total_energy(system::System, lattice::Lattice, biases::Biases)
     ene = total_energy(system, lattice)
     ene += bias_energy(system, biases)
 
@@ -334,7 +359,7 @@ function energy_diff(system::System, lattice::Lattice, filament::Filament)
     return trial_overlap_ene + trial_bending_ene - cur_overlap_ene - cur_bending_ene
 end
 
-function energy_diff(system::System, lattice::Lattice, biases::Vector{Float64})
+function energy_diff(system::System, lattice::Lattice, biases::Biases)
     using_current = lattice.using_current
     if !using_current
         use_current_coors!(system, lattice)
@@ -563,7 +588,7 @@ function translate_filament!(filament::Filament, lattice::Lattice, move_vector::
 end
 
 """Attempt to translate a filament up or down by one site."""
-function attempt_translation_move!(system::System, lattice::Lattice, ::Vector{Float64})
+function attempt_translation_move!(system::System, lattice::Lattice, ::Biases)
     use_trial_coors!(system, lattice)
     filament = rand(system.filaments)
     move_vector = [0, rand([-1, 1])]
@@ -654,7 +679,7 @@ function translate_filaments_with_split_points!(
 end
 
 """Attempt to increase or decrease radius by one lattice site."""
-function attempt_radius_move!(system::System, lattice::Lattice, biases::Vector{Float64})
+function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     dir = rand([-1, 1])
     if dir == 1 && lattice.height == lattice.max_height
         dir = -1
@@ -812,10 +837,33 @@ function write_params(system::System, simparms::SimulationParams, file::IOStream
 end
 
 """Add one to count of visits of current state."""
-function update_counts(counts::Vector{Int}, lattice)
-    counts[lattice.height - lattice.min_height + 1] += 1
+function update_counts(biases::Biases, lattice::Lattice)
+    bin = get_bin(biases.barriers, lattice.height)
+    biases.counts[bin] += 1
 
     return nothing
+end
+
+function create_bin_barriers(lattice::Lattice, numbins::Int)
+    binsize = div((lattice.max_height - lattice.min_height + 1), numbins)
+    barriers::Vector{Int} = []
+    barrier = lattice.min_height
+    for _ in 1:(numbins - 1)
+        barrier += binsize
+        push!(barriers, barrier)
+    end
+
+    return barriers
+end
+
+function get_bin(barriers::Vector{Int}, height::Int)
+    for (bin, barrier) in enumerate(barriers)
+        if height < barrier
+            return bin
+        end
+    end
+
+    return length(barriers) + 1
 end
 
 """Run an MC simulation."""
@@ -823,8 +871,7 @@ function run!(
     system::System,
     lattice::Lattice,
     simparms::SimulationParams,
-    counts::Vector{Int},
-    biases::Vector{Float64},
+    biases::Biases,
     ops_file::IOStream,
     vtf_file::IOStream
 )
@@ -839,7 +886,7 @@ function run!(
         if accepted
             attempt_move! === attempt_translation_move! ? accepts[1] += 1 : accepts[2] += 1
         end
-        update_counts(counts, lattice)
+        update_counts(biases, lattice)
         if step % simparms.write_interval == 0
             println("Step: $step")
             system.energy = total_energy(system, lattice)
@@ -864,9 +911,8 @@ end
 function run!(system::System, lattice::Lattice, simparms::SimulationParams)
     ops_file = prepare_ops_file("$(simparms.filebase).ops")
     vtf_file = prepare_vtf_file("$(simparms.filebase).vtf", system)
-    counts::Vector{Int} = zeros(lattice.max_height - lattice.min_height + 1)
-    biases::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
-    run!(system, lattice, simparms, counts, biases, ops_file, vtf_file)
+    biases = Biases(lattice, simparms.binwidth)
+    run!(system, lattice, simparms, biases, ops_file, vtf_file)
     close(ops_file)
     close(vtf_file)
     open("$(simparms.filebase).parms", "w") do file
@@ -881,25 +927,19 @@ Calculate new biases from counts.
 
 Updates the passed arrays in the process.
 """
-function update_biases!(
-    counts::Vector{Int},
-    freqs::Vector{Float64},
-    probs::Vector{Float64},
-    biases::Vector{Float64},
-    T::Float64,
-    max_bias_diff::Float64
-)
-    norm = sum(counts .* exp.(biases))
+function update_biases!(biases::Biases, T::Float64, max_bias_diff::Float64)
+    reduced_enes = biases.enes ./ (kb*T)
+    norm = sum(biases.counts .* exp.(reduced_enes))
     max_bias_diff *= kb*T
-    for i in 1:length(counts)
-        if counts[i] == 0
-            freqs[i] = 0
-            probs[i] = 0
+    for i in 1:length(biases.counts)
+        if biases.counts[i] == 0
+            biases.freqs[i] = 0
+            biases.probs[i] = 0
             bias_diff = -max_bias_diff
         else
-            freqs[i] = 1 / counts[i]
-            probs[i] = counts[i] / norm
-            bias_diff = kb*T*log.(probs[i]) - biases[i]
+            biases.freqs[i] = 1 / biases.counts[i]
+            biases.probs[i] = biases.counts[i]*exp(reduced_enes[i]) / norm
+            bias_diff = kb*T*log(biases.probs[i]) - biases.enes[i]
             if bias_diff > max_bias_diff
                 bias_diff = max_bias_diff
             elseif bias_diff < -max_bias_diff
@@ -907,15 +947,15 @@ function update_biases!(
             end
         end
 
-        biases[i] += bias_diff
-        counts[i] = 0
+        biases.enes[i] += bias_diff
+        biases.counts[i] = 0
     end
 
     return nothing
 end
 
 """Calculate biases from analytical model."""
-function analytical_biases(system::System, lattice::Lattice, biases::Vector{Float64})
+function analytical_biases(system::System, lattice::Lattice, biases::Biases)
     radius_max = calc_radius(system.parms.delta, lattice.max_height)
     for h in lattice.min_height:lattice.max_height
         radius = calc_radius(system.parms.delta, h)
@@ -931,13 +971,13 @@ end
 
 """Run an umbrella sampling MC simulation."""
 function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
-    counts::Vector{Int} = zeros(lattice.max_height - lattice.min_height + 1)
-    freqs::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
-    probs::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
-    biases::Vector{Float64} = zeros(lattice.max_height - lattice.min_height + 1)
+    biases = Biases(lattice, simparms.binwidth)
+
+    # what should I use here?
     if simparms.analytical_biases
         analytical_biases(system, lattice, biases)
     end
+    counts_file = prepare_us_file("$(simparms.filebase).counts", lattice)
     freqs_file = prepare_us_file("$(simparms.filebase).freqs", lattice)
     biases_file = prepare_us_file("$(simparms.filebase).biases", lattice)
     for i in 1:simparms.iters
@@ -945,15 +985,16 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
         iter_filebase = "$(simparms.filebase)_iter-$i"
         ops_file = prepare_ops_file("$iter_filebase.ops")
         vtf_file = prepare_vtf_file("$iter_filebase.vtf", system)
-        run!(system, lattice, simparms, counts, biases, ops_file, vtf_file)
-        update_biases!(counts, freqs, probs, biases, system.parms.T,
-                       simparms.max_bias_diff)
-        write_us_data(freqs, freqs_file)
+        run!(system, lattice, simparms, biases, ops_file, vtf_file)
+        update_biases!(biases, system.parms.T, simparms.max_bias_diff)
+        write_us_data(biases, counts_file)
+        write_us_data(biases, freqs_file)
         write_us_data(biases, biases_file)
         close(ops_file)
         close(vtf_file)
     end
 
+    close(counts_file)
     close(freqs_file)
     close(biases_file)
     open("$(simparms.filebase).parms", "w") do file

@@ -72,6 +72,7 @@ write_interval = 1e3
 radius_move_freq = 0.5
 filebase = "outs/test"
 analytical_biases = true
+binwidth = 1
 
 simparms = armc.SimulationParams(
     iters,
@@ -80,7 +81,8 @@ simparms = armc.SimulationParams(
     write_interval,
     radius_move_freq,
     filebase,
-    analytical_biases
+    analytical_biases,
+    binwidth
 )
 
 armc.run!(system, lattice, simparms)
