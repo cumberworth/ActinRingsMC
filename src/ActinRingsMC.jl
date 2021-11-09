@@ -807,6 +807,8 @@ function write_params(system::System, simparms::SimulationParams, file::IOStream
         "analytical_biases" => simparms.analytical_biases
     )
     println(file, JSON.json(parms))
+
+    return nothing
 end
 
 """Add one to count of visits of current state."""
@@ -867,7 +869,7 @@ function run!(system::System, lattice::Lattice, simparms::SimulationParams)
     run!(system, lattice, simparms, counts, biases, ops_file, vtf_file)
     close(ops_file)
     close(vtf_file)
-    open("$(simparms.filebase).parms") do file
+    open("$(simparms.filebase).parms", "w") do file
         write_params(system, simparms, file)
     end
 
@@ -954,7 +956,7 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
 
     close(freqs_file)
     close(biases_file)
-    open("$(simparms.filebase).parms") do file
+    open("$(simparms.filebase).parms", "w") do file
         write_params(system, simparms, file)
     end
 

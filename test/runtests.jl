@@ -44,15 +44,15 @@ delta = 36e-9
 Xc = 12e-9
 EI = 3.6e-26
 lf = 84
-Nfil = 8
+Nfil = 2
 Nsca = 2
 
 Lf = armc.calc_Lf(lf, delta)
 
 max_height = armc.calc_max_lattice_height(Nsca, lf)
 min_height = armc.calc_min_lattice_height(Nsca, lf)
-overlap = 21
-start_height = max_height - Nsca*overlap
+overlap = 1
+start_height = max_height - Nsca*(overlap - 1)
 start_radius = armc.calc_radius(delta, start_height)
 
 lattice = armc.Lattice(start_height, max_height, min_height)
@@ -61,7 +61,7 @@ armc.update_occupancies!(filaments, lattice)
 sysparms = armc.SystemParams(ks, kd, T, delta, Xc, EI, Lf, lf, Nfil, Nsca)
 system = armc.System(sysparms, filaments, start_radius)
 
-file = armc.prepare_vtf_file("test.vtf", system)
+file = armc.prepare_vtf_file("outs/test.vtf", system)
 armc.write_vtf(system, file)
 close(file)
 
@@ -70,7 +70,7 @@ steps = 1e4
 max_bias_diff = 5
 write_interval = 1e3
 radius_move_freq = 0.5
-filebase = "test"
+filebase = "outs/test"
 analytical_biases = true
 
 simparms = armc.SimulationParams(
