@@ -1,5 +1,6 @@
 module ActinRingsMC
 
+using JSON
 using Random
 
 const kb = 1.380649e-23
@@ -784,6 +785,30 @@ function write_us_data(data::Vector, file::IOStream)
     return nothing
 end
 
+"""Write simulation parameters to file."""
+function write_params(system::System, simparms::SimulationParams, file::IOStream)
+    parms = Dict(
+        "lf" => system.parms.lf,
+        "T" => system.parms.T,
+        "kd" => system.parms.kd,
+        "ks" => system.parms.ks,
+        "EI" => system.parms.EI,
+        "Lf" => system.parms.Lf,
+        "Xc" => system.parms.Xc,
+        "Nfil" => system.parms.Nfil,
+        "Nsca" => system.parms.Nsca,
+        "delta" => system.parms.delta,
+        "steps" => simparms.steps,
+        "write_interval" => simparms.write_interval,
+        "filebase" => simparms.filebase,
+        "max_bias_diff" => simparms.max_bias_diff,
+        "radius_move_freq" => simparms.radius_move_freq,
+        "iters" => simparms.iters,
+        "analytical_biases" => simparms.analytical_biases
+    )
+    println(file, JSON.json(parms))
+end
+
 """Add one to count of visits of current state."""
 function update_counts(counts::Vector{Int}, lattice)
     counts[lattice.height - lattice.min_height + 1] += 1
@@ -842,6 +867,9 @@ function run!(system::System, lattice::Lattice, simparms::SimulationParams)
     run!(system, lattice, simparms, counts, biases, ops_file, vtf_file)
     close(ops_file)
     close(vtf_file)
+    open("$(simparms.filebase).parms") do file
+        write_params(system, simparms, file)
+    end
 
     return nothing
 end
@@ -884,6 +912,7 @@ function update_biases!(
     return nothing
 end
 
+"""Calculate biases from analytical model."""
 function analytical_biases(system::System, lattice::Lattice, biases::Vector{Float64})
     radius_max = calc_radius(system.parms.delta, lattice.max_height)
     for h in lattice.min_height:lattice.max_height
@@ -925,6 +954,9 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
 
     close(freqs_file)
     close(biases_file)
+    open("$(simparms.filebase).parms") do file
+        write_params(system, simparms, file)
+    end
 
     return nothing
 end
