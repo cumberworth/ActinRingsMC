@@ -941,7 +941,7 @@ function update_biases!(biases::Biases, T::Float64, max_bias_diff::Float64)
             biases.probs[i] = 0
             bias_diff = -max_bias_diff
         else
-            biases.freqs[i] = 1 / steps
+            biases.freqs[i] = biases.counts[i] / steps
             biases.probs[i] = biases.counts[i]*exp(reduced_enes[i]) / norm
             bias_diff = kb*T*log(biases.probs[i]) - biases.enes[i]
             if bias_diff > max_bias_diff
