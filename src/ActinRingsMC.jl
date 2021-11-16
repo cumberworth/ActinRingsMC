@@ -554,8 +554,8 @@ function filaments_contiguous(system::System, lattice::Lattice)
 end
 
 """Test acceptance with Metropolis criterion."""
-function accept_move(system::System, delta_energy::Float64)
-    p_accept = min(1, exp(-delta_energy/kb/system.parms.T))
+function accept_move(system::System, delta_energy::Float64, mult::Float64=1.)
+    p_accept = min(1, mult*exp(-delta_energy/kb/system.parms.T))
     accept = false
     if p_accept == 1 || p_accept > rand(Float64)
         accept = true;
@@ -683,10 +683,10 @@ end
 """Attempt to increase or decrease radius by one lattice site."""
 function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     dir = rand([-1, 1])
-    if dir == 1 && lattice.height == lattice.max_height
-        dir = -1
-    elseif dir == -1 && lattice.height == lattice.min_height
-        dir = 1
+    if (dir == 1 && lattice.height == lattice.max_height ||
+        dir == -1 && lattice.height == lattice.min_height)
+        accept_current!(system, lattice)
+        use_current_coors!(system, lattice)
     end
 
     use_trial_coors!(system, lattice)
@@ -718,7 +718,8 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     end
 
     delta_energy = energy_diff(system, lattice, biases)
-    accept = accept_move(system, delta_energy)
+    mult = lattice.trial_height / lattice.current_height
+    accept = accept_move(system, delta_energy, mult)
     if accept
         accept_trial!(system, lattice)
     else
