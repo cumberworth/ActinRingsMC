@@ -993,6 +993,10 @@ end
 
 """Run an umbrella sampling MC simulation."""
 function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
+    open("$(simparms.filebase).parms", "w") do file
+        write_params(system, simparms, file)
+    end
+
     biases = Biases(lattice, simparms.binwidth)
 
     # what should I use here?
@@ -1019,9 +1023,6 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
     close(counts_file)
     close(freqs_file)
     close(biases_file)
-    open("$(simparms.filebase).parms", "w") do file
-        write_params(system, simparms, file)
-    end
 
     return nothing
 end
