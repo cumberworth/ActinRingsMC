@@ -357,7 +357,7 @@ end
 
 function total_energy(system::System, lattice::Lattice, biases::Biases)
     ene = total_energy(system, lattice)
-    ene += bias_energy(system, biases)
+    ene += bias_energy(lattice, biases)
 
     return ene
 end
@@ -389,12 +389,10 @@ function energy_diff(system::System, lattice::Lattice, biases::Biases)
         use_current_coors!(system, lattice)
     end
 
-    current_ene = total_energy(system, lattice)
-    current_ene += bias_energy(lattice, biases)
+    current_ene = total_energy(system, lattice, biases)
 
     use_trial_coors!(system, lattice)
-    trial_ene = total_energy(system, lattice)
-    trial_ene += bias_energy(lattice, biases)
+    trial_ene = total_energy(system, lattice, biases)
 
     if using_current
         use_current_coors!(system, lattice)
@@ -405,18 +403,18 @@ end
 
 """Check if system connected and ring is unbroken with correct Nsca."""
 function ring_and_system_connected(system::System, lattice::Lattice, filament::Filament)
-    if system.parms.Nfil == system.parms.Nsca == 2
-        first_pos = filament.coors[:, 1]
-        last_pos = filament.coors[:, end]
-        if (([first_pos[1] - 1, first_pos[2]] in keys(lattice.occupancy) ||
-            [first_pos[1] + 1, first_pos[2]] in keys(lattice.occupancy)) &&
-            ([last_pos[1] - 1, last_pos[2]] in keys(lattice.occupancy) ||
-            [last_pos[1] + 1, last_pos[2]] in keys(lattice.occupancy)))
-            return true
-        else
-            return false
-        end
-    end
+    #if system.parms.Nfil == system.parms.Nsca == 2
+    #    first_pos = filament.coors[:, 1]
+    #    last_pos = filament.coors[:, end]
+    #    if (([first_pos[1] - 1, first_pos[2]] in keys(lattice.occupancy) ||
+    #        [first_pos[1] + 1, first_pos[2]] in keys(lattice.occupancy)) &&
+    #        ([last_pos[1] - 1, last_pos[2]] in keys(lattice.occupancy) ||
+    #        [last_pos[1] + 1, last_pos[2]] in keys(lattice.occupancy)))
+    #        return true
+    #    else
+    #        return false
+    #    end
+    #end
     searched_filaments::Set{Int} = Set()
     pos = filament.coors[:, 1]
     site_i = 1
@@ -721,6 +719,8 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
         dir == -1 && lattice.height == lattice.min_height)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
+
+        return false
     end
 
     use_trial_coors!(system, lattice)
@@ -735,6 +735,13 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
 
     lattice.trial_height += dir
     update_radius!(system, lattice, lattice.trial_height)
+    #if lattice.trial_height > lattice.max_height
+    #    println(dir)
+    #    println(lattice.height)
+    #    println(lattice.current_height)
+    #    println(lattice.trial_height)
+    #    throw(DomainError)
+    #end
     if !filaments_contiguous(system, lattice)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
