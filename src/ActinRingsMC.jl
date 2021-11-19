@@ -87,6 +87,18 @@ mutable struct Biases
     binwidth::Int
 end
 
+function create_bin_barriers(lattice::Lattice, numbins::Int)
+    binsize = div((lattice.max_height - lattice.min_height + 1), numbins)
+    barriers::Vector{Int} = []
+    barrier = lattice.min_height
+    for _ in 1:(numbins - 1)
+        barrier += binsize
+        push!(barriers, barrier)
+    end
+
+    return barriers
+end
+
 function Biases(lattice::Lattice, binwidth::Int)
     numstates = lattice.max_height - lattice.min_height + 1
     numbins = div(numstates, binwidth)
@@ -101,6 +113,16 @@ function Biases(lattice::Lattice, binwidth::Int)
         numbins,
         binwidth
    )
+end
+
+function get_bin(barriers::Vector{Int}, height::Int)
+    for (bin, barrier) in enumerate(barriers)
+        if height < barrier
+            return bin
+        end
+    end
+
+    return length(barriers) + 1
 end
 
 """Calculate the number of sites per filament."""
@@ -383,6 +405,18 @@ end
 
 """Check if system connected and ring is unbroken with correct Nsca."""
 function ring_and_system_connected(system::System, lattice::Lattice, filament::Filament)
+    if system.parms.Nfil == system.parms.Nsca == 2
+        first_pos = filament.coors[:, 1]
+        last_pos = filament.coors[:, end]
+        if (([first_pos[1] - 1, first_pos[2]] in keys(lattice.occupancy) ||
+            [first_pos[1] + 1, first_pos[2]] in keys(lattice.occupancy)) &&
+            ([last_pos[1] - 1, last_pos[2]] in keys(lattice.occupancy) ||
+            [last_pos[1] + 1, last_pos[2]] in keys(lattice.occupancy)))
+            return true
+        else
+            return false
+        end
+    end
     searched_filaments::Set{Int} = Set()
     pos = filament.coors[:, 1]
     site_i = 1
@@ -847,28 +881,6 @@ function update_counts(biases::Biases, lattice::Lattice)
     biases.counts[bin] += 1
 
     return nothing
-end
-
-function create_bin_barriers(lattice::Lattice, numbins::Int)
-    binsize = div((lattice.max_height - lattice.min_height + 1), numbins)
-    barriers::Vector{Int} = []
-    barrier = lattice.min_height
-    for _ in 1:(numbins - 1)
-        barrier += binsize
-        push!(barriers, barrier)
-    end
-
-    return barriers
-end
-
-function get_bin(barriers::Vector{Int}, height::Int)
-    for (bin, barrier) in enumerate(barriers)
-        if height < barrier
-            return bin
-        end
-    end
-
-    return length(barriers) + 1
 end
 
 """Run an MC simulation."""
