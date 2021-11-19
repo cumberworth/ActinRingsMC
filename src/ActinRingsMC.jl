@@ -759,9 +759,9 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     end
 
     delta_energy = energy_diff(system, lattice, biases)
-    #mult = lattice.trial_height / lattice.current_height
-    #accept = accept_move(system, delta_energy, mult)
-    accept = accept_move(system, delta_energy)
+    mult = lattice.trial_height / lattice.current_height
+    accept = accept_move(system, delta_energy, mult)
+    #accept = accept_move(system, delta_energy)
     if accept
         accept_trial!(system, lattice)
     else
