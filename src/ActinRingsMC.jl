@@ -596,6 +596,22 @@ function accept_move(system::System, delta_energy::Float64, mult::Float64=1.)
     return accept;
 end
 
+function recenter!(system::System, lattice::Lattice)
+    origin = [0, system.filaments[1].coors[2, 1]]
+    if origin == 0
+        return nothing
+    end
+
+    for filament in system.filaments
+        for i in 1:filament.lf
+            filament.coors[2, i] -= origin
+            wrap_pos!(lattice, filament.coors[:, i])
+        end
+    end
+
+    return nothing
+end
+
 """
 Translate a filament with given vector.
 
@@ -624,7 +640,9 @@ end
 """Attempt to translate a filament up or down by one site."""
 function attempt_translation_move!(system::System, lattice::Lattice, ::Biases)
     use_trial_coors!(system, lattice)
-    filament = rand(system.filaments)
+
+    # Do not move the first filament as it is the reference
+    filament = rand(system.filaments[2:end])
     move_vector = [0, rand([-1, 1])]
     if !translate_filament!(filament, lattice, move_vector)
         accept_current!(system, lattice)
@@ -764,6 +782,9 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     accept = accept_move(system, delta_energy)
     if accept
         accept_trial!(system, lattice)
+        if system.filaments[1] in filaments
+            recenter!(system, lattice)
+        end
     else
         update_radius!(system, lattice, lattice.height - dir)
         accept_current!(system, lattice)
@@ -903,6 +924,7 @@ function run!(
     # Overly simple way to record move acceptance frequencies
     attempts = [0, 0]
     accepts = [0, 0]
+    recenter!(system, lattice)
     for step in 1:simparms.steps
         attempt_move! = select_move(simparms)
         accepted = attempt_move!(system, lattice, biases)
