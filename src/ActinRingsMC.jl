@@ -691,6 +691,11 @@ function find_split_points(filaments::Vector{Filament}, lattice::Lattice, dir::I
     for filament in filaments
         push!(split_points, 0)
 
+        # This is because the first filament is the reference
+        if filament.index == 1
+            break
+        end
+
         # This exception ensures filaments starting on bottom boundary are not moved down
         if filament.coors[2, 1] == 0 && dir == -1
             break
@@ -795,9 +800,6 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     #accept = accept_move(system, delta_energy, mult)
     accept = accept_move(system, delta_energy)
     if accept
-        if system.filaments[1] in filaments
-            recenter!(system, lattice)
-        end
         accept_trial!(system, lattice)
     else
         update_radius!(system, lattice, lattice.height - dir)
