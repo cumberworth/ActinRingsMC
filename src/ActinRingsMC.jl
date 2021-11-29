@@ -223,6 +223,16 @@ function wrap_pos!(lattice::Lattice, pos::Vector{Int})
     return nothing
 end
 
+function system_in_boundaries(system::System, lattice::Lattice)
+    for filament in system.filaments
+        if any(filament.coors[2, :] .< 0) || any(filament.coors[2, :] .> lattice.height)
+            return false
+        end
+    end
+
+    return true
+end
+
 """Generate a starting configuration with uniform overlaps."""
 function generate_starting_config(
     lattice::Lattice,
@@ -597,15 +607,19 @@ function accept_move(system::System, delta_energy::Float64, mult::Float64=1.)
 end
 
 function recenter!(system::System, lattice::Lattice)
-    origin = [0, system.filaments[1].coors[2, 1]]
+    origin = system.filaments[1].coors[2, 1]
     if origin == 0
         return nothing
     end
 
     for filament in system.filaments
         for i in 1:filament.lf
-            filament.coors[2, i] -= origin
-            wrap_pos!(lattice, filament.coors[:, i])
+            pos = filament.coors[:, i]
+            delete!(lattice.occupancy, pos)
+            pos[2] -= origin
+            wrap_pos!(lattice, pos)
+            lattice.occupancy[copy(pos)] = (filament.index, i)
+            filament.coors[:, i] = pos
         end
     end
 
@@ -781,10 +795,10 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     #accept = accept_move(system, delta_energy, mult)
     accept = accept_move(system, delta_energy)
     if accept
-        accept_trial!(system, lattice)
         if system.filaments[1] in filaments
             recenter!(system, lattice)
         end
+        accept_trial!(system, lattice)
     else
         update_radius!(system, lattice, lattice.height - dir)
         accept_current!(system, lattice)
