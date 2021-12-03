@@ -686,25 +686,17 @@ function attempt_translation_move!(system::System, lattice::Lattice, ::Biases)
 end
 
 """Find filament sites that are below upper periodic boundary."""
-function find_split_points(filaments::Vector{Filament}, lattice::Lattice, dir::Int)
+function find_split_points(system::System, lattice::Lattice)
     split_points::Vector{Int} = []
-    for filament in filaments
+    for filament in system.filaments
         push!(split_points, 0)
-
-        # This is because the first filament is the reference
-        if filament.index == 1
-            break
-        end
-
-        # This exception ensures filaments starting on bottom boundary are not moved down
-        if filament.coors[2, 1] == 0 && dir == -1
-            break
-        end
-
         for i in 1:filament.lf
-            split_points[end] += 1
-            if filament.coors[2, i] == lattice.height
-                break
+            y = filament.coors[2, i]
+            if y == lattice.height
+                if i != filament.lf
+                    split_points[end] = i
+                    break
+                end
             end
         end
     end
@@ -719,25 +711,22 @@ Translate segments of filaments below split point only.
 Returns false if steric clash occurs.
 """
 function translate_filaments_with_split_points!(
-    filaments::Vector{Filament},
-    split_points::Vector{Int},
+    system::System,
     lattice::Lattice,
+    split_points::Vector{Int},
     dir::Int
 )
-    for (filament, split_point) in zip(filaments, split_points)
+    for (filament, split_point) in zip(system.filaments, split_points)
         for i in 1:split_point
             pos = filament.coors[:, i]
             delete!(lattice.occupancy, pos)
         end
     end
 
-    for (filament, split_point) in zip(filaments, split_points)
+    for (filament, split_point) in zip(system.filaments, split_points)
         for i in 1:split_point
             filament.coors[2, i] += dir
             pos = filament.coors[:, i]
-            if dir == -1
-                wrap_pos!(lattice, pos)
-            end
             if !(pos in keys(lattice.occupancy))
                 lattice.occupancy[pos] = (filament.index, i)
             else
@@ -761,9 +750,8 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     end
 
     use_trial_coors!(system, lattice)
-    filaments = rand(system.filaments, rand(1:system.parms.Nfil))
-    split_points = find_split_points(filaments, lattice, dir)
-    if !translate_filaments_with_split_points!(filaments, split_points, lattice, dir)
+    split_points = find_split_points(system, lattice)
+    if !translate_filaments_with_split_points!(system, lattice, split_points, dir)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
 
