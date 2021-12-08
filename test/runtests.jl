@@ -44,8 +44,8 @@ delta = 36e-9
 Xc = 12e-9
 EI = 3.6e-26
 lf = 84
-Nfil = 2
-Nsca = 2
+Nfil = 6
+Nsca = 4
 
 Lf = armc.calc_Lf(lf, delta)
 
@@ -65,7 +65,7 @@ file = armc.prepare_vtf_file("outs/test.vtf", system)
 armc.write_vtf(system, file)
 close(file)
 
-iters = 10
+iters = 2
 steps = 1e4
 max_bias_diff = 5
 write_interval = 1e3

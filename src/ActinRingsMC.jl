@@ -223,6 +223,27 @@ function wrap_pos!(lattice::Lattice, pos::Vector{Int})
     return nothing
 end
 
+
+"""Distance between two points on the lattice along y given direction."""
+function periodic_distance(lattice::Lattice, y1::Int, y2::Int, dir::Int)
+    d = 0
+    if y2 > y1
+        if dir == 1
+            d = y2 - y1
+        else
+            d = -(lattice.height - y2 + y1 + 1)
+        end
+    elseif y2 < y1
+        if dir == 1
+            d = lattice.height - y1 + y2 + 1
+        else
+            d = y2 - y1
+        end
+    end
+
+    return d
+end
+
 function system_in_boundaries(system::System, lattice::Lattice)
     for filament in system.filaments
         if any(filament.coors[2, :] .< 0) || any(filament.coors[2, :] .> lattice.height)
@@ -412,6 +433,23 @@ function energy_diff(system::System, lattice::Lattice, biases::Biases)
 end
 
 """Check if system connected and ring is unbroken with correct Nsca."""
+function ring_and_system_connected(system::System, lattice::Lattice, check_consistency=false)
+    ring_connected = []
+    for filament in system.filaments
+        push!(ring_connected, ring_and_system_connected(system, lattice, filament))
+        if !check_consistency
+            break
+        end
+    end
+    if all(ring_connected)
+        return true
+    elseif all(.!ring_connected)
+        return false
+    else
+        throw(ErrorException("Inconsistent connectivity check"))
+    end
+end
+
 function ring_and_system_connected(system::System, lattice::Lattice, filament::Filament)
     #if system.parms.Nfil == system.parms.Nsca == 2
     #    first_pos = filament.coors[:, 1]
@@ -428,7 +466,7 @@ function ring_and_system_connected(system::System, lattice::Lattice, filament::F
     searched_filaments::Set{Int} = Set()
     pos = filament.coors[:, 1]
     site_i = 1
-    path::Vector{Vector{Int}} = [[], []]
+    path::Vector{Vector{Int}} = [[], [], []]
     path_length = 0
     ring_contig = false
     connected_filaments::Set{Int} = Set(filament.index)
@@ -446,13 +484,13 @@ function ring_and_system_connected(system::System, lattice::Lattice, filament::F
                 adj_filament = system.filaments[adj_filament_i]
                 push!(path[1], filament.index)
                 push!(path[2], site_i)
+                push!(path[3], path_length)
                 ring_contig, connected_filaments, Nsca = search_filament_for_path(
                     system,
                     lattice,
                     adj_filament,
                     adj_site_i,
                     path,
-                    path_length,
                     ring_contig,
                     connected_filaments,
                     Nsca
@@ -465,6 +503,7 @@ function ring_and_system_connected(system::System, lattice::Lattice, filament::F
                 end
                 pop!(path[1])
                 pop!(path[2])
+                pop!(path[3])
             end
         end
         site_i += 1
@@ -476,8 +515,16 @@ function ring_and_system_connected(system::System, lattice::Lattice, filament::F
     return false
 end
 
-function path_completed(lattice::Lattice, path_length::Int, entry_site::Int, exit_site::Int)
-    return abs(path_length + exit_site - entry_site) == lattice.height + 1
+function path_completed(
+    lattice::Lattice,
+    path_length::Int,
+    entry_site::Int,
+    exit_site::Int,
+    )
+    remainder_dist = exit_site - entry_site
+    #println((entry_site, exit_site, remainder_dist, path_length, abs(path_length + remainder_dist), lattice.height + 1))
+
+    return abs(path_length + remainder_dist) == lattice.height + 1
 end
 
 function search_filament_for_path(
@@ -486,17 +533,19 @@ function search_filament_for_path(
     filament::Filament,
     site_i::Int,
     path::Vector{Vector{Int}},
-    path_length::Int,
     ring_contig::Bool,
     connected_filaments::Set{Int},
     Nsca::Int
 )
     searched_filaments::Set{Int} = Set()
     initial_pos = filament.coors[:, site_i]
+    path_length = path[3][end]
     initial_path_length = path_length
     pos = copy(initial_pos)
     dir = -1
     initial_site_i = site_i
+    #println(filament.index)
+    #println(path)
     while true
 
         # Check if end of filament reached
@@ -516,13 +565,17 @@ function search_filament_for_path(
         for dx in [-1, 1]
             adj_pos = [pos[1] + dx, pos[2]]
             if adj_pos in keys(lattice.occupancy)
+                #println(adj_pos)
                 adj_filament_i, adj_site_i = lattice.occupancy[adj_pos]
+                adj_filament = system.filaments[adj_filament_i]
 
                 # This will check the neighbouring filaments at every site
                 # This seems inefficient, but then I can't skip after one check if Nsca = 2
                 if adj_filament_i in path[1]
                     path_i = indexin(adj_filament_i, path[1])[1]
-                    if path_completed(lattice, path_length, adj_site_i, path[2][path_i])
+                    sub_path_length = path_length - path[3][path_i]
+                    exit_site = path[2][path_i]
+                    if path_completed(lattice, sub_path_length, adj_site_i, exit_site)
                         ring_contig = true
                         Nsca = min(Nsca, length(path[1]) - path_i + 2)
                     end
@@ -543,16 +596,15 @@ function search_filament_for_path(
 
                 union!(connected_filaments, adj_filament_i)
                 union!(searched_filaments, adj_filament_i)
-                push!(path[1], adj_filament_i)
-                push!(path[2], adj_site_i)
-                adj_filament = system.filaments[adj_filament_i]
+                push!(path[1], filament.index)
+                push!(path[2], site_i)
+                push!(path[3], path_length)
                 ring_contig, connected_filaments, Nsca = search_filament_for_path(
                     system,
                     lattice,
                     adj_filament,
                     adj_site_i,
                     path,
-                    path_length,
                     ring_contig,
                     connected_filaments,
                     Nsca
@@ -565,6 +617,9 @@ function search_filament_for_path(
                 end
                 pop!(path[1])
                 pop!(path[2])
+                pop!(path[3])
+                #println(filament.index)
+                #println(path)
             end
         end
 
@@ -665,7 +720,7 @@ function attempt_translation_move!(system::System, lattice::Lattice, ::Biases)
         return false
     end
 
-    if !ring_and_system_connected(system, lattice, filament)
+    if !ring_and_system_connected(system, lattice)
         accept_current!(filament, lattice)
         use_current_coors!(system, lattice)
 
@@ -775,7 +830,7 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     end
 
     if dir == 1
-        if !ring_and_system_connected(system, lattice, system.filaments[1])
+        if !ring_and_system_connected(system, lattice)
             accept_current!(system, lattice)
             use_current_coors!(system, lattice)
 
@@ -938,6 +993,7 @@ function run!(
         end
         update_counts(biases, lattice)
         if step % simparms.write_interval == 0
+            ring_and_system_connected(system, lattice, true)
             println("Step: $step")
             system.energy = total_energy(system, lattice)
             write_ops(system, lattice, step, ops_file)
