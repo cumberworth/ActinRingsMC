@@ -1,5 +1,6 @@
 module ActinRingsMC
 
+using DelimitedFiles
 using JSON
 using Random
 
@@ -26,6 +27,9 @@ struct SimulationParams
     radius_move_freq::Float64
     filebase::String
     analytical_biases::Bool
+    read_biases::Bool
+    biases_filename::String
+    restart_iter::Int
     binwidth::Int
 end
 
@@ -113,6 +117,10 @@ function Biases(lattice::Lattice, binwidth::Int)
         numbins,
         binwidth
    )
+end
+
+function read_biases!(filename::String, itr::Int, biases::Biases)
+    biases.enes = readdlm(filename, skipstart=1)[itr, :]
 end
 
 function get_bin(barriers::Vector{Int}, height::Int)
@@ -957,7 +965,7 @@ function write_params(system::System, simparms::SimulationParams, file::IOStream
         "analytical_biases" => simparms.analytical_biases,
         "binwidth" => simparms.binwidth
     )
-    println(file, JSON.json(parms))
+    println(file, json(parms))
 
     return nothing
 end
@@ -1100,14 +1108,19 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
 
     biases = Biases(lattice, simparms.binwidth)
 
-    # what should I use here?
-    if simparms.analytical_biases
+    start_iter = 1
+    end_iter = simparms.iters
+    if simparms.read_biases
+        read_biases!(simparms.biases_filename, simparms.restart_iter, biases)
+        start_iter = simparms.restart_iter + 1
+        end_iter += simparms.restart_iter
+    elseif simparms.analytical_biases
         analytical_biases(system, lattice, biases)
     end
     counts_file = prepare_us_file("$(simparms.filebase).counts", lattice)
     freqs_file = prepare_us_file("$(simparms.filebase).freqs", lattice)
     biases_file = prepare_us_file("$(simparms.filebase).biases", lattice)
-    for i in 1:simparms.iters
+    for i in start_iter:end_iter
         println("Iter: $i")
         iter_filebase = "$(simparms.filebase)_iter-$i"
         ops_file = prepare_ops_file("$iter_filebase.ops")

@@ -72,6 +72,9 @@ write_interval = 1e3
 radius_move_freq = 0.5
 filebase = "outs/test"
 analytical_biases = true
+read_biases = false
+biases_filename = ""
+restart_iter = 0
 binwidth = 1
 
 simparms = armc.SimulationParams(
@@ -82,10 +85,33 @@ simparms = armc.SimulationParams(
     radius_move_freq,
     filebase,
     analytical_biases,
+    read_biases,
+    biases_filename,
+    restart_iter,
     binwidth
 )
 
 armc.run!(system, lattice, simparms)
+armc.run_us!(system, lattice, simparms)
+
+filebase = "outs/test_run-1"
+read_biases = true
+biases_filename = "outs/test.biases"
+restart_iter = 2
+simparms = armc.SimulationParams(
+    iters,
+    steps,
+    max_bias_diff,
+    write_interval,
+    radius_move_freq,
+    filebase,
+    analytical_biases,
+    read_biases,
+    biases_filename,
+    restart_iter,
+    binwidth
+)
+
 armc.run_us!(system, lattice, simparms)
 
 main()

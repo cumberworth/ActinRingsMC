@@ -30,6 +30,10 @@ git-tree-sha1 = "314642620f95fca224d578ec615b944b5e5ee6db"
 uuid = "31a5f54b-26ea-5ae9-a837-f05ce5417438"
 version = "0.6.8"
 
+[[DelimitedFiles]]
+deps = ["Mmap"]
+uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+
 [[Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
