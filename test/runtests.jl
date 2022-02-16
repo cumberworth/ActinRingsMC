@@ -61,6 +61,7 @@ armc.update_occupancies!(filaments, lattice)
 sysparms = armc.SystemParams(ks, kd, T, delta, Xc, EI, Lf, lf, Nfil, Nsca)
 system = armc.System(sysparms, filaments, start_radius)
 
+mkpath("outs")
 file = armc.prepare_vtf_file("outs/test.vtf", system)
 armc.write_vtf(system, file)
 close(file)
@@ -115,3 +116,4 @@ simparms = armc.SimulationParams(
 armc.run_us!(system, lattice, simparms)
 
 main()
+rm("outs", recursive=true)
