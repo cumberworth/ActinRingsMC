@@ -6,7 +6,7 @@ module ActinRingsMC
 
 export SystemParams, SimulationParams, System, Lattice
 export calc_lf, calc_Lf, calc_max_lattice_height, calc_min_lattice_height, calc_radius
-export generate_starting_config, run!, run_us!
+export generate_starting_config, update_occupancies!, run!, run_us!
 
 using DelimitedFiles
 using DocStringExtensions
@@ -387,7 +387,11 @@ function generate_starting_config(
     return filaments
 end
 
-"""Clear occupancies and fully update."""
+"""
+$(TYPEDSIGNATURES)
+
+Clear occupancies and fully update.
+"""
 function update_occupancies!(filaments::Vector{Filament}, lattice::Lattice)
     lattice.current_occupancy = Dict()
     lattice.trial_occupancy = Dict()
@@ -1094,6 +1098,9 @@ function run!(
         end
     end
 
+    println()
+    println("Move info:")
+    println()
     println("Filament translation")
     println("Attempts: $(attempts[1])")
     println("Accepts: $(accepts[1])")
@@ -1215,6 +1222,7 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
     freqs_file = prepare_us_file("$(simparms.filebase).freqs", lattice)
     biases_file = prepare_us_file("$(simparms.filebase).biases", lattice)
     for i in start_iter:end_iter
+        println()
         println("Iter: $i")
         iter_filebase = "$(simparms.filebase)_iter-$i"
         ops_file = prepare_ops_file("$iter_filebase.ops")
@@ -1231,6 +1239,8 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
     close(counts_file)
     close(freqs_file)
     close(biases_file)
+
+    println()
 
     return nothing
 end

@@ -1,5 +1,7 @@
 # ActinRingsMC
 
+##README
+
 ```@docs
 ActinRingsMC
 ```
@@ -8,5 +10,6 @@ ActinRingsMC
 
 ```@autodocs
 Modules = [ActinRingsMC]
+Order = [:type, :function]
 Private = false
 ```

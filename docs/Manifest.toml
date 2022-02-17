@@ -10,7 +10,7 @@ version = "0.0.1"
 
 [[deps.ActinRingsMC]]
 deps = ["Debugger", "DelimitedFiles", "DocStringExtensions", "JSON", "Random", "Revise", "Test"]
-git-tree-sha1 = "85a06d69c7f4310f213b7c8330171f55f5d0fe15"
+git-tree-sha1 = "1f51c229dc2d594cb327ba953f99adeece62b4bc"
 repo-rev = "master"
 repo-url = ".."
 uuid = "9ef53a5f-0b2d-4acd-b164-e3995a0d2389"
