@@ -1,0 +1,3 @@
+var documenterSearchIndex = {"docs":
+[{"location":"","page":"Home","title":"Home","text":"CurrentModule = ActinRingsMC","category":"page"},{"location":"#ActinRingsMC","page":"Home","title":"ActinRingsMC","text":"","category":"section"},{"location":"","page":"Home","title":"Home","text":"Documentation for ActinRingsMC.","category":"page"},{"location":"","page":"Home","title":"Home","text":"","category":"page"},{"location":"","page":"Home","title":"Home","text":"run_us!","category":"page"},{"location":"#ActinRingsMC.run_us!","page":"Home","title":"ActinRingsMC.run_us!","text":"run_us!(system::System, lattice::Lattice, simparms::SimulationParams)\n\n\nRun an umbrella sampling MC simulation.\n\n\n\n\n\n","category":"function"}]
+}
