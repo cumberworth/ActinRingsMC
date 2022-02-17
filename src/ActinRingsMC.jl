@@ -1,3 +1,4 @@
+"""$(README)"""
 module ActinRingsMC
 
 export SystemParams, SimulationParams, System, Lattice

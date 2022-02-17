@@ -2,4 +2,6 @@
 CurrentModule = ActinRingsMC
 ```
 
-$(README)
+```@docs
+ActinRingsMC
+```
