@@ -9,8 +9,8 @@ uuid = "a4c015fc-c6ff-483c-b24f-f7ea428134e9"
 version = "0.0.1"
 
 [[deps.ActinRingsMC]]
-deps = ["Debugger", "DelimitedFiles", "JSON", "Random", "Revise", "Test"]
-git-tree-sha1 = "9cf71fccc56d36e7fec58f79e661a98e0a433c0c"
+deps = ["Debugger", "DelimitedFiles", "DocStringExtensions", "JSON", "Random", "Revise", "Test"]
+git-tree-sha1 = "85a06d69c7f4310f213b7c8330171f55f5d0fe15"
 repo-rev = "master"
 repo-url = ".."
 uuid = "9ef53a5f-0b2d-4acd-b164-e3995a0d2389"
