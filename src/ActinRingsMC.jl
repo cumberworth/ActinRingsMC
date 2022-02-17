@@ -1,35 +1,71 @@
 module ActinRingsMC
 
+export SystemParams, SimulationParams, System, Lattice
+export calc_lf, calc_Lf, calc_max_lattice_height, calc_min_lattice_height, calc_radius
+export generate_starting_config, run!, run_us!
+
 using DelimitedFiles
+using DocStringExtensions
 using JSON
 using Random
 
 const kb = 1.380649e-23
 
+"""
+System parameters.
+
+$(TYPEDFIELDS)
+"""
 struct SystemParams
+    """Dissociation constant for single crosslinker binding"""
     ks::Float64
+    """Dissociation constant for double crosslinker binding"""
     kd::Float64
+    """Temperature (K)"""
     T::Float64
+    """Lattice spacing (m)"""
     delta::Float64
+    """Crosslinker concentration (M)"""
     Xc::Float64
+    """Bending rigidity (N m^2)"""
     EI::Float64
+    """Filament length (m)"""
     Lf::Float64
+    """Binding sites per filament"""
     lf::Int
+    """Total number of filaments"""
     Nfil::Int
+    """Number of scaffold filaments"""
     Nsca::Int
 end
 
+"""
+Simulation parameters.
+
+$(TYPEDFIELDS)
+"""
 struct SimulationParams
+    """Number of iterations for US"""
     iters::Int
+    """MC steps for a run or single iteration"""
     steps::Int
+    """Maximum change in bias energy (kbT)"""
     max_bias_diff::Float64
+    """Number of steps between writing to output files"""
     write_interval::Int
+    """Frequency of radius moves (the remainder are filament translation moves)"""
     radius_move_freq::Float64
+    """Output filebase (include filepath)"""
     filebase::String
+    """Use analytical model to generation starting biases"""
     analytical_biases::Bool
+    """Read starting biases from file"""
     read_biases::Bool
+    """File to read biases from"""
     biases_filename::String
+    """Iteration to to start on"""
     restart_iter::Int
+    """Width of bins for lattice height bias (set to 1 for no binning)"""
     binwidth::Int
 end
 
@@ -49,11 +85,18 @@ mutable struct System
     energy::Float64
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+System data, including parameters and positions of filaments.
+
+The given radius should be that corresponding to the lattice height used to create the
+lattice and the starting configuration of the filaments.
+"""
 function System(parms::SystemParams, filaments::Vector{Filament}, radius::Float64)
     return System(parms, filaments, radius, 0)
 end
 
-"""2D lattice with periodic conditions on y."""
 mutable struct Lattice
     occupancy::Dict{Vector{Int},Tuple{Int,Int}}
     using_current::Bool
@@ -66,6 +109,14 @@ mutable struct Lattice
     min_height::Int
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+2D lattice with periodic conditions on y.
+
+The max and min heights should be calculated based on the number of scaffold filaments and
+the length of the filaments.
+"""
 function Lattice(height::Int, max_height::Int, min_height::Int)
     occupancy::Dict{Vector{Int},Tuple{Int,Int}} = Dict()
     return Lattice(
@@ -133,20 +184,40 @@ function get_bin(barriers::Vector{Int}, height::Int)
     return length(barriers) + 1
 end
 
-"""Calculate the number of sites per filament."""
+"""
+$(TYPEDSIGNATURES)
+
+Calculate the number of sites per filament.
+"""
 calc_lf(Lf::Float64, delta::Float64)::Int = div(Lf, delta)
 
-"""Calculate the length of a filament."""
+"""
+$(TYPEDSIGNATURES)
+
+Calculate the length of a filament.
+"""
 calc_Lf(lf::Int, delta::Float64) = delta * lf
 
-"""Calculate the maximum allowable height of a lattice given Nsca."""
+"""
+$(TYPEDSIGNATURES)
+
+Calculate the maximum allowable height of a lattice given Nsca.
+"""
 calc_max_lattice_height(Nsca::Int, lf::Int) = Nsca * lf - Nsca - 1
 
-"""Calculate the minimum allowable height of a lattice given Nsca."""
-calc_min_lattice_height(Nsca::Int, lf::Int) = div(Nsca, 2)*lf - 1
+"""
+$(TYPEDSIGNATURES)
 
-"""Calculate the radius of a ring for a given lattice height."""
-calc_radius(delta::Float64, height::Int) = delta * (height + 1)/(2pi)
+Calculate the minimum allowable height of a lattice given Nsca.
+"""
+calc_min_lattice_height(Nsca::Int, lf::Int) = div(Nsca, 2) * lf - 1
+
+"""
+$(TYPEDSIGNATURES)
+
+Calculate the radius of a ring for a given lattice height.
+"""
+calc_radius(delta::Float64, height::Int) = delta * (height + 1) / (2pi)
 
 """Update the radius/height variables in the system and lattice."""
 function update_radius!(system::System, lattice::Lattice, height::Int)
@@ -178,7 +249,7 @@ function use_trial_coors!(system::System, lattice::Lattice)
         filament.using_current = false
         filament.coors = filament.trial_coors
     end
-
+    
     return nothing
 end
 
@@ -241,7 +312,7 @@ function periodic_distance(lattice::Lattice, y1::Int, y2::Int, dir::Int)
         else
             d = -(lattice.height - y2 + y1 + 1)
         end
-    elseif y2 < y1
+        elseif y2 < y1
         if dir == 1
             d = lattice.height - y1 + y2 + 1
         else
@@ -257,12 +328,18 @@ function system_in_boundaries(system::System, lattice::Lattice)
         if any(filament.coors[2, :] .< 0) || any(filament.coors[2, :] .> lattice.height)
             return false
         end
-    end
+        end
 
     return true
 end
 
-"""Generate a starting configuration with uniform overlaps."""
+"""
+$(TYPEDSIGNATURES)
+
+Generate a starting configuration with uniform overlaps.
+
+The number of scaffold filament Nsca and the number of lattices lf must be even.
+"""
 function generate_starting_config(
     lattice::Lattice,
     Nfil::Int,
@@ -290,7 +367,7 @@ function generate_starting_config(
             end
             filament = Filament(lf, true, coors, coors, copy(coors), Ni)
             push!(filaments, filament)
-            pos[2] += lf - 2*overlap
+            pos[2] += lf - 2 * overlap
             wrap_pos!(lattice, pos)
             Ni += 1
             if Ni > Nfil
@@ -301,9 +378,9 @@ function generate_starting_config(
         pos[1] += 1
         pos[1] % 2 == 0 ? pos[2] = 0 : pos[2] = lf - overlap
         wrap_pos!(lattice, pos)
-    end
+end
 
-    return filaments
+return filaments
 end
 
 """Clear occupancies and fully update."""
@@ -362,7 +439,7 @@ function overlap_energy(system::System, lattice::Lattice, filament::Filament)
             if adj_pos in keys(lattice.occupancy)
                 l += 1
             end
-        end
+    end
     end
     L = system.parms.delta * l
 
@@ -372,7 +449,7 @@ end
 function overlap_energy(system::System, lattice::Lattice)
     ene = 0
     for filament in system.filaments
-        ene += overlap_energy(system, lattice, filament)/2
+        ene += overlap_energy(system, lattice, filament) / 2
     end
 
     return ene
@@ -387,9 +464,9 @@ end
 function total_energy(system::System, lattice::Lattice)
     ene = 0
     for filament in system.filaments
-        ene += overlap_energy(system, lattice, filament)/2
+        ene += overlap_energy(system, lattice, filament) / 2
         ene += filament_bending_energy(system)
-    end
+end
 
     return ene
 end
@@ -398,7 +475,7 @@ function total_energy(system::System, lattice::Lattice, biases::Biases)
     ene = total_energy(system, lattice)
     ene += bias_energy(lattice, biases)
 
-    return ene
+return ene
 end
 
 """Calculate total energy difference (J)."""
@@ -459,7 +536,7 @@ function ring_and_system_connected(system::System, lattice::Lattice, check_consi
 end
 
 function ring_and_system_connected(system::System, lattice::Lattice, filament::Filament)
-    #if system.parms.Nfil == system.parms.Nsca == 2
+    # if system.parms.Nfil == system.parms.Nsca == 2
     #    first_pos = filament.coors[:, 1]
     #    last_pos = filament.coors[:, end]
     #    if (([first_pos[1] - 1, first_pos[2]] in keys(lattice.occupancy) ||
@@ -470,7 +547,7 @@ function ring_and_system_connected(system::System, lattice::Lattice, filament::F
     #    else
     #        return false
     #    end
-    #end
+    # end
     searched_filaments::Set{Int} = Set()
     pos = filament.coors[:, 1]
     site_i = 1
@@ -512,7 +589,7 @@ function ring_and_system_connected(system::System, lattice::Lattice, filament::F
                 pop!(path[1])
                 pop!(path[2])
                 pop!(path[3])
-            end
+        end
         end
         site_i += 1
         pos += [0, 1]
@@ -530,7 +607,7 @@ function path_completed(
     exit_site::Int,
     )
     remainder_dist = exit_site - entry_site
-    #println((entry_site, exit_site, remainder_dist, path_length, abs(path_length + remainder_dist), lattice.height + 1))
+    # println((entry_site, exit_site, remainder_dist, path_length, abs(path_length + remainder_dist), lattice.height + 1))
 
     return abs(path_length + remainder_dist) == lattice.height + 1
 end
@@ -552,8 +629,8 @@ function search_filament_for_path(
     pos = copy(initial_pos)
     dir = -1
     initial_site_i = site_i
-    #println(filament.index)
-    #println(path)
+    # println(filament.index)
+    # println(path)
     while true
 
         # Check if end of filament reached
@@ -567,13 +644,13 @@ function search_filament_for_path(
                 continue
             else
                 break
-            end
+        end
         end
 
         for dx in [-1, 1]
             adj_pos = [pos[1] + dx, pos[2]]
             if adj_pos in keys(lattice.occupancy)
-                #println(adj_pos)
+                # println(adj_pos)
                 adj_filament_i, adj_site_i = lattice.occupancy[adj_pos]
                 adj_filament = system.filaments[adj_filament_i]
 
@@ -626,9 +703,9 @@ function search_filament_for_path(
                 pop!(path[1])
                 pop!(path[2])
                 pop!(path[3])
-                #println(filament.index)
-                #println(path)
-            end
+                # println(filament.index)
+                # println(path)
+        end
         end
 
         site_i += dir
@@ -652,7 +729,7 @@ function filaments_contiguous(system::System, lattice::Lattice)
                 return false
             end
             prev_pos = pos
-        end
+    end
     end
 
     return true
@@ -660,7 +737,7 @@ end
 
 """Test acceptance with Metropolis criterion."""
 function accept_move(system::System, delta_energy::Float64, mult::Float64=1.)
-    p_accept = min(1, mult*exp(-delta_energy/kb/system.parms.T))
+    p_accept = min(1, mult * exp(-delta_energy / kb / system.parms.T))
     accept = false
     if p_accept == 1 || p_accept > rand(Float64)
         accept = true;
@@ -724,14 +801,14 @@ function attempt_translation_move!(system::System, lattice::Lattice, ::Biases)
     if !translate_filament!(filament, lattice, move_vector)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
-
+        
         return false
     end
 
     if !ring_and_system_connected(system, lattice)
         accept_current!(filament, lattice)
         use_current_coors!(system, lattice)
-
+        
         return false
     end
 
@@ -761,7 +838,7 @@ function find_split_points(system::System, lattice::Lattice)
                     break
                 end
             end
-        end
+    end
     end
 
     return split_points
@@ -783,7 +860,7 @@ function translate_filaments_with_split_points!(
         for i in 1:split_point
             pos = filament.coors[:, i]
             delete!(lattice.occupancy, pos)
-        end
+    end
     end
 
     for (filament, split_point) in zip(system.filaments, split_points)
@@ -795,7 +872,7 @@ function translate_filaments_with_split_points!(
             else
                 return false
             end
-        end
+    end
     end
 
     return true
@@ -823,13 +900,13 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
 
     lattice.trial_height += dir
     update_radius!(system, lattice, lattice.trial_height)
-    #if lattice.trial_height > lattice.max_height
+    # if lattice.trial_height > lattice.max_height
     #    println(dir)
     #    println(lattice.height)
     #    println(lattice.current_height)
     #    println(lattice.trial_height)
     #    throw(DomainError)
-    #end
+    # end
     if !filaments_contiguous(system, lattice)
         accept_current!(system, lattice)
         use_current_coors!(system, lattice)
@@ -841,18 +918,18 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
         if !ring_and_system_connected(system, lattice)
             accept_current!(system, lattice)
             use_current_coors!(system, lattice)
-
+            
             return false
         end
     end
 
     delta_energy = energy_diff(system, lattice, biases)
-    #mult = (lattice.trial_height + 1) / (lattice.current_height + 1)
-    #accept = accept_move(system, delta_energy, mult)
+    # mult = (lattice.trial_height + 1) / (lattice.current_height + 1)
+    # accept = accept_move(system, delta_energy, mult)
     accept = accept_move(system, delta_energy)
     if accept
         accept_trial!(system, lattice)
-    else
+        else
         update_radius!(system, lattice, lattice.height - dir)
         accept_current!(system, lattice)
     end
@@ -876,7 +953,7 @@ function prepare_ops_file(filename::String)
     file = open(filename, "w")
     header = "step energy height radius"
     println(file, header)
-
+    
     return file
 end
 
@@ -885,7 +962,7 @@ function prepare_us_file(filename::String, lattice::Lattice)
     file = open(filename, "w")
     header = ""
     for h in lattice.min_height:lattice.max_height
-        header*="$h "
+        header *= "$h "
     end
 
     println(file, header)
@@ -914,10 +991,10 @@ function write_vtf(system::System, file::IOStream)
     for filament in system.filaments
         for i in 1:filament.lf
             # Widen the aspect ratio for easier viewing
-            x = filament.coors[1, i]*10
+            x = filament.coors[1, i] * 10
             y = filament.coors[2, i]
             println(file, "$x $y 0")
-        end
+    end
     end
 
     println(file, "")
@@ -966,7 +1043,7 @@ function write_params(system::System, simparms::SimulationParams, file::IOStream
         "binwidth" => simparms.binwidth
     )
     println(file, json(parms))
-
+    
     return nothing
 end
 
@@ -978,7 +1055,11 @@ function update_counts(biases::Biases, lattice::Lattice)
     return nothing
 end
 
-"""Run an MC simulation."""
+"""
+$(TYPEDSIGNATURES)
+
+Run an MC simulation.
+"""
 function run!(
     system::System,
     lattice::Lattice,
@@ -1022,6 +1103,11 @@ function run!(
     return nothing
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Run an MC simulation.
+"""
 function run!(system::System, lattice::Lattice, simparms::SimulationParams)
     ops_file = prepare_ops_file("$(simparms.filebase).ops")
     vtf_file = prepare_vtf_file("$(simparms.filebase).vtf", system)
@@ -1042,10 +1128,10 @@ Calculate new biases from counts.
 Updates the passed arrays in the process.
 """
 function update_biases!(biases::Biases, T::Float64, max_bias_diff::Float64)
-    reduced_enes = biases.enes ./ (kb*T)
+    reduced_enes = biases.enes ./ (kb * T)
     steps = sum(biases.counts)
     norm = sum(biases.counts .* exp.(reduced_enes))
-    max_bias_diff *= kb*T
+    max_bias_diff *= kb * T
     for i in 1:length(biases.counts)
         if biases.counts[i] == 0
             biases.freqs[i] = 0
@@ -1053,16 +1139,16 @@ function update_biases!(biases::Biases, T::Float64, max_bias_diff::Float64)
             bias_diff = -max_bias_diff
         else
             biases.freqs[i] = biases.counts[i] / steps
-            biases.probs[i] = biases.counts[i]*exp(reduced_enes[i]) / norm
-            bias_diff = kb*T*log(biases.probs[i]) - biases.enes[i]
+            biases.probs[i] = biases.counts[i] * exp(reduced_enes[i]) / norm
+            bias_diff = kb * T * log(biases.probs[i]) - biases.enes[i]
             if bias_diff > max_bias_diff
                 bias_diff = max_bias_diff
             elseif bias_diff < -max_bias_diff
                 bias_diff = -max_bias_diff
-            end
+        end
         end
 
-        biases.enes[i] += bias_diff
+    biases.enes[i] += bias_diff
         biases.counts[i] = 0
     end
 
@@ -1088,19 +1174,23 @@ function analytical_biases(system::System, lattice::Lattice, biases::Biases)
         lower_upper_biases = []
         for h in [lower_barrier, upper_barrier]
             radius = calc_radius(system.parms.delta, h)
-            L = 2*pi*(radius_max - radius)/system.parms.Nsca
-            overlaps = system.parms.Nsca + 2*(system.parms.Nfil - system.parms.Nsca)
-            sliding_energy = overlaps*overlap_energy(system, L)
-            bending_energy = system.parms.Nfil*filament_bending_energy(system, radius)
+            L = 2 * pi * (radius_max - radius) / system.parms.Nsca
+            overlaps = system.parms.Nsca + 2 * (system.parms.Nfil - system.parms.Nsca)
+            sliding_energy = overlaps * overlap_energy(system, L)
+            bending_energy = system.parms.Nfil * filament_bending_energy(system, radius)
             push!(lower_upper_biases, -(sliding_energy + bending_energy))
         end
-        biases.enes[bin] = sum(lower_upper_biases)/2
+        biases.enes[bin] = sum(lower_upper_biases) / 2
     end
 
     return nothing
 end
 
-"""Run an umbrella sampling MC simulation."""
+"""
+$(TYPEDSIGNATURES)
+
+Run an umbrella sampling MC simulation.
+"""
 function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
     open("$(simparms.filebase).parms", "w") do file
         write_params(system, simparms, file)
@@ -1115,7 +1205,7 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
         start_iter = simparms.restart_iter + 1
         end_iter += simparms.restart_iter
     elseif simparms.analytical_biases
-        analytical_biases(system, lattice, biases)
+    analytical_biases(system, lattice, biases)
     end
     counts_file = prepare_us_file("$(simparms.filebase).counts", lattice)
     freqs_file = prepare_us_file("$(simparms.filebase).freqs", lattice)
@@ -1135,7 +1225,7 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
     end
 
     close(counts_file)
-    close(freqs_file)
+close(freqs_file)
     close(biases_file)
 
     return nothing
