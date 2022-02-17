@@ -316,7 +316,7 @@ function periodic_distance(lattice::Lattice, y1::Int, y2::Int, dir::Int)
         else
             d = -(lattice.height - y2 + y1 + 1)
         end
-        elseif y2 < y1
+    elseif y2 < y1
         if dir == 1
             d = lattice.height - y1 + y2 + 1
         else
@@ -332,7 +332,7 @@ function system_in_boundaries(system::System, lattice::Lattice)
         if any(filament.coors[2, :] .< 0) || any(filament.coors[2, :] .> lattice.height)
             return false
         end
-        end
+    end
 
     return true
 end
@@ -382,9 +382,9 @@ function generate_starting_config(
         pos[1] += 1
         pos[1] % 2 == 0 ? pos[2] = 0 : pos[2] = lf - overlap
         wrap_pos!(lattice, pos)
-end
+    end
 
-return filaments
+    return filaments
 end
 
 """Clear occupancies and fully update."""
@@ -443,7 +443,7 @@ function overlap_energy(system::System, lattice::Lattice, filament::Filament)
             if adj_pos in keys(lattice.occupancy)
                 l += 1
             end
-    end
+        end
     end
     L = system.parms.delta * l
 
@@ -470,7 +470,7 @@ function total_energy(system::System, lattice::Lattice)
     for filament in system.filaments
         ene += overlap_energy(system, lattice, filament) / 2
         ene += filament_bending_energy(system)
-end
+    end
 
     return ene
 end
@@ -479,7 +479,7 @@ function total_energy(system::System, lattice::Lattice, biases::Biases)
     ene = total_energy(system, lattice)
     ene += bias_energy(lattice, biases)
 
-return ene
+    return ene
 end
 
 """Calculate total energy difference (J)."""
@@ -593,7 +593,7 @@ function ring_and_system_connected(system::System, lattice::Lattice, filament::F
                 pop!(path[1])
                 pop!(path[2])
                 pop!(path[3])
-        end
+            end
         end
         site_i += 1
         pos += [0, 1]
@@ -648,7 +648,7 @@ function search_filament_for_path(
                 continue
             else
                 break
-        end
+            end
         end
 
         for dx in [-1, 1]
@@ -709,7 +709,7 @@ function search_filament_for_path(
                 pop!(path[3])
                 # println(filament.index)
                 # println(path)
-        end
+            end
         end
 
         site_i += dir
@@ -733,7 +733,7 @@ function filaments_contiguous(system::System, lattice::Lattice)
                 return false
             end
             prev_pos = pos
-    end
+        end
     end
 
     return true
@@ -842,7 +842,7 @@ function find_split_points(system::System, lattice::Lattice)
                     break
                 end
             end
-    end
+        end
     end
 
     return split_points
@@ -864,7 +864,7 @@ function translate_filaments_with_split_points!(
         for i in 1:split_point
             pos = filament.coors[:, i]
             delete!(lattice.occupancy, pos)
-    end
+        end
     end
 
     for (filament, split_point) in zip(system.filaments, split_points)
@@ -876,7 +876,7 @@ function translate_filaments_with_split_points!(
             else
                 return false
             end
-    end
+        end
     end
 
     return true
@@ -933,7 +933,7 @@ function attempt_radius_move!(system::System, lattice::Lattice, biases::Biases)
     accept = accept_move(system, delta_energy)
     if accept
         accept_trial!(system, lattice)
-        else
+    else
         update_radius!(system, lattice, lattice.height - dir)
         accept_current!(system, lattice)
     end
@@ -998,7 +998,7 @@ function write_vtf(system::System, file::IOStream)
             x = filament.coors[1, i] * 10
             y = filament.coors[2, i]
             println(file, "$x $y 0")
-    end
+        end
     end
 
     println(file, "")
@@ -1149,10 +1149,10 @@ function update_biases!(biases::Biases, T::Float64, max_bias_diff::Float64)
                 bias_diff = max_bias_diff
             elseif bias_diff < -max_bias_diff
                 bias_diff = -max_bias_diff
-        end
+            end
         end
 
-    biases.enes[i] += bias_diff
+        biases.enes[i] += bias_diff
         biases.counts[i] = 0
     end
 
@@ -1209,7 +1209,7 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
         start_iter = simparms.restart_iter + 1
         end_iter += simparms.restart_iter
     elseif simparms.analytical_biases
-    analytical_biases(system, lattice, biases)
+        analytical_biases(system, lattice, biases)
     end
     counts_file = prepare_us_file("$(simparms.filebase).counts", lattice)
     freqs_file = prepare_us_file("$(simparms.filebase).freqs", lattice)
@@ -1229,7 +1229,7 @@ function run_us!(system::System, lattice::Lattice, simparms::SimulationParams)
     end
 
     close(counts_file)
-close(freqs_file)
+    close(freqs_file)
     close(biases_file)
 
     return nothing
