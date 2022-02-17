@@ -4,7 +4,7 @@ using Documenter
 DocMeta.setdocmeta!(ActinRingsMC, :DocTestSetup, :(using ActinRingsMC); recursive=true)
 
 makedocs(;
-    modules=[ActinRingsMC],
+    #modules=[ActinRingsMC],
     authors="Alexander Cumberworth <alex@cumberworth.org>",
     repo="https://github.com/cumberworth/ActinRingsMC.jl/blob/{commit}{path}#{line}",
     sitename="ActinRingsMC.jl",

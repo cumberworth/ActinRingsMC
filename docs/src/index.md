@@ -1,7 +1,12 @@
-```@meta
-CurrentModule = ActinRingsMC
-```
+# ActinRingsMC
 
 ```@docs
 ActinRingsMC
+```
+
+## API
+
+```@autodocs
+Modules = [ActinRingsMC]
+Private = false
 ```
