@@ -1,6 +1,6 @@
 # ActinRingsMC
 
-##README
+## README
 
 ```@docs
 ActinRingsMC

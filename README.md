@@ -5,24 +5,21 @@
 [![Build Status](https://github.com/cumberworth/ActinRingsMC.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/cumberworth/ActinRingsMC.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 [![Coverage](https://codecov.io/gh/cumberworth/ActinRingsMC.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/cumberworth/ActinRingsMC.jl)
 
-A Julia simulation package with functions for running adaptive umbrella sampling Monte Carlo simulations of crosslinked filamentous (e.g. actin) rings.
+A Julia simulation package with functions for running adaptive umbrella sampling Monte Carlo simulations of crosslinked actin rings.
 
 [Repository](https://github.com/cumberworth/ActinRingsMC.jl)
 
 [Documentation](http://www.cumberworth.org/ActinRingsMC.jl)
 
-This package implements the simulation protocol outlined in the paper X.
-The input and output files for the simulations in the paper that use this package can be found here.
+This package implements the simulation protocol outlined in the Supplemental Material of [Ref. 1](#references).
 
 ## Installation
-
-Installation instructions for Julia can be found at the [official website](https://github.com/cumberworth/ActinRingsMC.jl).
 
 The package can be installed by starting the Julia REPL, typing `]` to enter package mode, and running
 ```
 add ActinRingsMC
 ```
-to install from the General x, or by running
+to install from the General registry, or by running
 ```
 add https://github.com/cumberworth/ActinRingsMC.jl
 ```
@@ -54,16 +51,16 @@ Each subsequent row contains data from an iteration.
 `.counts` gives the number of times each lattice height was visited, `.freqs` gives a normalized version of this.
 `.biases` includes the biases that were used to for that iteration (in contrast to those that would be calculated from its data).
 
-A related python package, [actinrings](https://github.com/cumberworth/actinrings), includes code for analyzing and plotting the output from these simulations, including Landau free energies and ring constriction forces; see its documentation for details.
+A related python package, [actinrings](https://github.com/cumberworth/actinrings), includes code for analyzing and plotting the output from these simulations, including free energies and ring constriction forces; see its documentation for details.
 
-# Links
+## References
 
-[Julia programming language]()
+[1] A. Cumberworth and P. R. t. Wolde, Constriction of actin rings by passive crosslinkers.
 
-[Associated paper]()
+## Links
 
-[Replication package data]()
+[Julia programming language](https://julialang.org/)
 
-[Replication analysis package]()
+[Replication analysis package](https://github.com/cumberworth/actinrings)
 
-[VMD]()
+[VMD](https://www.ks.uiuc.edu/Research/vmd/)
