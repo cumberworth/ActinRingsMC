@@ -1,7 +1,7 @@
 name = "ActinRingsMC"
 uuid = "9ef53a5f-0b2d-4acd-b164-e3995a0d2389"
 authors = ["Alexander Cumberworth <alex@cumberworth.org>"]
-version = "1.0.0"
+version = "1.0.1"
 
 [deps]
 Debugger = "31a5f54b-26ea-5ae9-a837-f05ce5417438"
