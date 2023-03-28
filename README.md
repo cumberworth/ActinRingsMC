@@ -57,7 +57,7 @@ A related python package, [actinrings](https://github.com/cumberworth/actinrings
 
 ## References
 
-[1] A. Cumberworth and P. R. t. Wolde, Constriction of actin rings by passive crosslinkers.
+[1] A. Cumberworth and P. R. ten Wolde, Constriction of actin rings by passive crosslinkers, [arXiv:2203.04260 [physics.bio-ph]](https://doi.org/10.48550/arXiv.2203.04260).
 
 ## Links
 
